@@ -12,10 +12,10 @@ struct list_head {
 };
 
 
-static inline void __init_list_head(struct list_head *list) {
-    list->next = list;
-    list->prev = list;
-};
+// static inline void __init_list_head(struct list_head *list) {
+//     list->next = list;
+//     list->prev = list;
+// };
 
 
 #endif

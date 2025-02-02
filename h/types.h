@@ -10,30 +10,7 @@
 #include "../h/const.h"
 
 typedef signed int cpu_t;
-
 typedef unsigned int memaddr;
-
-
-/* process control block type */
-typedef struct pcb_t {
-    /* process queue fields */
-    struct pcb_t    *p_next,  /* pointer to next entry */
-                    *p_prev,  /* pointer to prev entry */
-
-                    /* process tree fields */            
-                    *p_prnt,  /* pointer to parent */
-                    *p_child, /* pointer to 1st child */
-                    *p_sib;   /* pointer to sibling */
-                
-    /* process status information */
-    state_t p_s;   /* processor state */
-    cpu_t p_time;  /* cpu time used by proc */
-    int *p_semAdd; /* pointer to sema4 on which process blocked */
-    
-    /* support layer information */
-    // support_t *p_supportStruct; /* ptr to support struct */
-
-} pcb_t;
 
 
 /* Device Register */
@@ -116,5 +93,49 @@ typedef struct state_t {
 #define s_ra s_reg[28]
 #define s_HI s_reg[29]
 #define s_LO s_reg[30]
+
+
+
+
+
+
+
+/* process control block type */
+typedef struct pcb_t {
+    /* process queue fields */
+    struct pcb_t    *p_next,  /* pointer to next entry */
+                    *p_prev,  /* pointer to prev entry */
+
+                    /* process tree fields */            
+                    *p_prnt,  /* pointer to parent */
+                    *p_child, /* pointer to 1st child */
+                    *p_sib;   /* pointer to sibling */
+                
+    /* process status information */
+    state_t p_s;   /* processor state */
+    cpu_t p_time;  /* cpu time used by proc */
+    int *p_semAdd; /* pointer to sema4 on which process blocked */
+    
+    /* support layer information */
+    /*support_t *p_supportStruct;*/ /* ptr to support struct */
+    
+
+} pcb_t, *pcb_PTR;
+
+
+
+
+/* semaphore descriptor (SEMD) data structure */
+typedef struct semd_t {
+    struct semd_t *s_next; /* next element on the ASL */
+    int *s_semAdd; /* pointer to the semaphore*/
+    pcb_t *s_procQ; /* tail pointer to a */
+/* process queue */
+} semd_t, *semd_PTR;
+
+
+
+
+
 
 #endif
