@@ -109,7 +109,8 @@ typedef struct pcb_t {
                     /* process tree fields */            
                     *p_prnt,  /* pointer to parent */
                     *p_child, /* pointer to 1st child */
-                    *p_sib;   /* pointer to sibling */
+                    *p_lSib;  /* pointer to sibling */
+                    *p_rSib;  /* pointer to sibling */
                 
     /* process status information */
     state_t p_s;   /* processor state */
