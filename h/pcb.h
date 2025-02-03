@@ -10,7 +10,6 @@
 */
 
 #include "../h/types.h"
-#include "../utils/list_func.h"
 
 extern void freePcb (pcb_PTR p);
 extern pcb_PTR allocPcb ();
