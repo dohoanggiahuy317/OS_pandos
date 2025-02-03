@@ -89,5 +89,6 @@
 /* Phase 1 Constant */
 #define MAXPROC 20
 #define MAXINT 0x0FFFFFFF
+#define MAXPROC_SEM (MAXPROC + 2)
 
 #endif
