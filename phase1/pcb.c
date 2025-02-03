@@ -38,8 +38,10 @@ void initPcbs () {
 /**************************************************************
  * allocPcb
  *
- * Return a pointer to a free pcb after 
- * initializing all its fields
+ * Allocate a pcb from the pcbFree list
+ * 
+ * @param void
+ * @return: a pointer to the allocated pcb, or NULL if no pcbs are available
 **************************************************************/
 
 pcb_PTR allocPcb () {

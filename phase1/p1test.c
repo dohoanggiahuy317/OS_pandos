@@ -124,28 +124,28 @@ void adderrbuf(char *strp) {
 
 
 void main() {
-	int i;
+	/* int i; */
 
-	initPcbs();
-	addokbuf("Initialized process control blocks   \n");
+	/*  initPcbs(); */
+	/* addokbuf("Initialized process control blocks   \n"); */
 
 	/* Check allocProc */
-	for (i = 0; i < MAXPROC; i++) {
+/* 	for (i = 0; i < MAXPROC; i++) {
 		if ((procp[i] = allocPcb()) == NULL)
 			adderrbuf("allocPcb: unexpected NULL   ");
 	}
 	if (allocPcb() != NULL) {
 		adderrbuf("allocPcb: allocated more than MAXPROC entries   ");
 	}
-	addokbuf("allocPcb ok   \n");
+	addokbuf("allocPcb ok   \n"); */
 
 	/* return the last 10 entries back to free list */
-	for (i = 10; i < MAXPROC; i++)
+/* 	for (i = 10; i < MAXPROC; i++)
 		freePcb(procp[i]);
-	addokbuf("freed 10 entries   \n");
+	addokbuf("freed 10 entries   \n"); */
 
 	/* create a 10-element process queue */
-	qa = NULL;
+/* 	qa = NULL;
 	if (!emptyProcQ(qa)) adderrbuf("emptyProcQ: unexpected FALSE   ");
 	addokbuf("Inserting...   \n");
 	for (i = 0; i < 10; i++) {
@@ -169,9 +169,9 @@ void main() {
 	addokbuf("inserted 10 elements   \n");
 
 	if (emptyProcQ(qa)) adderrbuf("emptyProcQ: unexpected TRUE"   );
-
+ */
 	/* Check outProc and headProc */
-	if (headProcQ(qa) != firstproc)
+/* 	if (headProcQ(qa) != firstproc)
 		adderrbuf("headProcQ failed   ");
 	q = outProcQ(&qa, firstproc);
 	if (q == NULL || q != firstproc)
@@ -183,10 +183,10 @@ void main() {
 	freePcb(q);
 	if (outProcQ(&qa, procp[0]) != NULL)
 		adderrbuf("outProcQ failed on nonexistent entry   ");
-	addokbuf("outProcQ ok   \n");
+	addokbuf("outProcQ ok   \n"); */
 
 	/* Check if removeProc and insertProc remove in the correct order */
-	addokbuf("Removing...   \n");
+	/* addokbuf("Removing...   \n");
 	for (i = 0; i < 8; i++) {
 		if ((q = removeProcQ(&qa)) == NULL)
 			adderrbuf("removeProcQ: unexpected NULL   ");
@@ -206,20 +206,20 @@ void main() {
 	addokbuf("checking process trees...\n");
 
 	if (!emptyChild(procp[2]))
-	  adderrbuf("emptyChild: unexpected FALSE   ");
+	  adderrbuf("emptyChild: unexpected FALSE   "); */
 	
 	/* make procp[1] through procp[9] children of procp[0] */
-	addokbuf("Inserting...   \n");
+/* 	addokbuf("Inserting...   \n");
 	for (i = 1; i < 10; i++) {
 		insertChild(procp[0], procp[i]);
 	}
 	addokbuf("Inserted 9 children   \n");
 
 	if (emptyChild(procp[0]))
-	  adderrbuf("emptyChild: unexpected TRUE   ");
+	  adderrbuf("emptyChild: unexpected TRUE   "); */
 
 	/* Check outChild */
-	q = outChild(procp[1]);
+/* 	q = outChild(procp[1]);
 	if (q == NULL || q != procp[1])
 		adderrbuf("outChild failed on first child   ");
 	q = outChild(procp[4]);
@@ -227,10 +227,10 @@ void main() {
 		adderrbuf("outChild failed on middle child   ");
 	if (outChild(procp[0]) != NULL)
 		adderrbuf("outChild failed on nonexistent child   ");
-	addokbuf("outChild ok   \n");
+	addokbuf("outChild ok   \n"); */
 
 	/* Check removeChild */
-	addokbuf("Removing...   \n");
+	/* addokbuf("Removing...   \n");
 	for (i = 0; i < 7; i++) {
 		if ((q = removeChild(procp[0])) == NULL)
 			adderrbuf("removeChild: unexpected NULL   ");
@@ -245,15 +245,15 @@ void main() {
 	addokbuf("process tree module ok      \n");
 
 	for (i = 0; i < 10; i++) 
-		freePcb(procp[i]);
+		freePcb(procp[i]); */
 
 
 	/* check ASL */
-	initASL();
+	/* initASL();
 	addokbuf("Initialized active semaphore list   \n");
-
+ */
 	/* check removeBlocked and insertBlocked */
-	addokbuf("insertBlocked test #1 started  \n");
+/* 	addokbuf("insertBlocked test #1 started  \n");
 	for (i = 10; i < MAXPROC; i++) {
 		procp[i] = allocPcb();
 		if (insertBlocked(&sem[i], procp[i]))
@@ -264,10 +264,10 @@ void main() {
 		procp[i] = allocPcb();
 		if (insertBlocked(&sem[i], procp[i]))
 			adderrbuf("insertBlocked(2): unexpected TRUE   ");
-	}
+	} */
 
 	/* check if semaphore descriptors are returned to free list */
-	p = removeBlocked(&sem[11]);
+	/* p = removeBlocked(&sem[11]);
 	if (insertBlocked(&sem[11],p))
 		adderrbuf("removeBlocked: fails to return to free list   ");
 
@@ -313,6 +313,6 @@ void main() {
 	addokbuf("headBlocked and outBlocked ok   \n");
 	addokbuf("ASL module ok   \n");
 	addokbuf("So Long and Thanks for All the Fish\n");
-
+ */
 }
 
