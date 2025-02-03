@@ -62,16 +62,11 @@ pcb_PTR allocPcb () {
     p->p_rSib     = NULL;
     
     /* Clear the process state */
-    p->p_s.s_entryHI = 0;
-    p->p_s.s_cause   = 0;
-    p->p_s.s_status  = 0;
-    p->p_s.s_pc      = 0;
-    {
-        int j;
-        for (j = 0; j < STATEREGNUM; j++) {
-            p->p_s.s_reg[j] = 0;
-        }
+    int j;
+    for (j = 0; j < STATEREGNUM; j++) {
+        p->p_s.s_reg[j] = 0;
     }
+    
 
     /* Initialize other pcb fields */
     p->p_time   = 0;

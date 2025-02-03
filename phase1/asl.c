@@ -1,24 +1,12 @@
-/* 
- * asl.c
- *
- * Implementation of the Active Semaphore List (ASL) module.
- *
- * The ASL maintains a sorted (by semaphore address) singly linked list
- * of semaphore descriptors. To simplify traversal, dummy nodes are
- * placed at the head (with s_semAdd = 0) and tail (with s_semAdd = MAXINT).
- *
- * Unused semaphore descriptors are kept on a free list.
- */
+#include "../h/asl.h"
+#include "../h/pcb.h"
+#include "../h/const.h"
+#include <stddef.h>
 
-#include "../h/asl.h"    /* Public declarations for the ASL module */
-#include "../h/pcb.h"    /* For process queue operations (insertProcQ, removeProcQ, outProcQ, headProcQ) */
-#include "../h/const.h"  /* For MAXPROC and (hopefully) MAXINT */
-#include <stddef.h>      /* For NULL */
-
-/* 
- * We assume MAXPROC is defined (e.g., in const.h) as the maximum number of processes.
- * For the ASL we need two extra semaphore descriptors (for the dummy head and tail).
- */
+/**************************************************************
+ * The maximum number of semaphore
+ * We reserve two dummy nodes and one descriptor for each process in the system
+**************************************************************/
 #define MAXSEMDS (MAXPROC + 2)
 
 

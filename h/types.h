@@ -95,10 +95,9 @@ typedef struct state_t {
 #define s_LO s_reg[30]
 
 
-
-
-
-
+/*****************************************/
+/* PHASE 1: support layer data structure */
+/*****************************************/
 
 /* process control block type */
 typedef struct pcb_t {
@@ -109,7 +108,7 @@ typedef struct pcb_t {
                     /* process tree fields */            
                     *p_prnt,  /* pointer to parent */
                     *p_child, /* pointer to 1st child */
-                    *p_lSib;  /* pointer to sibling */
+                    *p_lSib,  /* pointer to sibling */
                     *p_rSib;  /* pointer to sibling */
                 
     /* process status information */
@@ -130,8 +129,7 @@ typedef struct pcb_t {
 typedef struct semd_t {
     struct semd_t *s_next; /* next element on the ASL */
     int *s_semAdd; /* pointer to the semaphore*/
-    pcb_t *s_procQ; /* tail pointer to a */
-/* process queue */
+    pcb_t *s_procQ; /* tail pointer to a process queue */
 } semd_t, *semd_PTR;
 
 
