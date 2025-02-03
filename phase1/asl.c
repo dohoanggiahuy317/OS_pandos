@@ -1,7 +1,7 @@
 #include "../h/asl.h"
 #include "../h/pcb.h"
 #include "../h/const.h"
-#include <stddef.h>
+#include "../h/types.h"
 
 
 /* ------------------------------------------------------ */
@@ -21,7 +21,6 @@
 
 static semd_t *semd_h;
 static semd_t *semdFree_h;
-static semd_t semdTable[MAXSEMDS];
 
 /* ---------------------------------------------------------------------- */
 /* --------------------- The Active Semaphore List -----------------------*/
@@ -94,12 +93,13 @@ semd_PTR allocSemd () {
 **************************************************************/
 
 void initASL () {
-    int i;
+    static semd_t semdTable[MAXSEMDS];
     semd_t *dummyTail;
     
     /* Initialize the free list with the remaining semaphore descriptors */
+    int i;
     semdFree_h = NULL;
-    for (i = 0; i <= MAXSEMDS; i++) {
+    for (i = 0; i < MAXSEMDS; i++) {
         freeSemd(&semdTable[i]);
     }
 
