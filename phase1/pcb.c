@@ -1,14 +1,13 @@
-#include "../h/pcb.h"      
-#include "../h/const.h" 
-#include <string.h>  
+#include "../h/pcb.h"
+#include "../h/const.h"
+#include "../h/types.h"
+
 
 /* ------------------------------------------------------ */
 /* ------------------ Global Variables ------------------ */
 /* ------------------------------------------------------ */
 
-static pcb_t pcbFreeTable[MAXPROC];
-static pcb_t *pcbFree_h = NULL;
-
+static pcb_PTR pcbFree_h;
 
 /* ----------------------------------------------------------------------- */
 /* ------------------ Allocation/Deallocation Functions ------------------ */
@@ -25,13 +24,13 @@ static pcb_t *pcbFree_h = NULL;
 **************************************************************/
 
 void initPcbs () {
-    int i;
+    static pcb_t pcbFreeTable[MAXPROC];
     pcbFree_h = NULL;  /* The free list is empty at first */
     
+    int i;
     /* For each pcb in the static array, insert it into the free list */
     for (i = 0; i < MAXPROC; i++) {
-        /* add pcb to the free list */
-        freePcb(&pcbFreeTable[i]);
+        freePcb(&pcbFreeTable[i]); /* add pcb to the free list */
     }
 }
 
@@ -60,8 +59,8 @@ pcb_PTR allocPcb () {
     p->p_prev    = NULL;
     p->p_prnt    = NULL;
     p->p_child   = NULL;
-    p->p_lSib     = NULL;
-    p->p_rSib     = NULL;
+    p->p_lSib    = NULL;
+    p->p_rSib    = NULL;
     
     /* Clear the process state */
     int j;
