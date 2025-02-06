@@ -1,7 +1,25 @@
+/***********************************************************************************************
+ * Process Control Block Implementation
+ * --------------------------------------
+ * This module implements and manages the Process Control Block abstraction,
+ * which is essential for tracking processes in an operating system.
+ *
+ * Data Structures:
+ * - pcb_t: Represents a Process Control Block containing:
+ *   - p_next, p_prev: Pointers for maintaining a doubly linked list (used in free list and process queues)
+ *   - p_prnt, p_child, p_lSib, p_rSib: Pointers for managing the process tree structure
+ *   - p_s: The process state
+ *   - p_time: The CPU time used by the process
+ *   - p_semAdd: Pointer to the semaphore the process is blocked on
+ *
+ * - pcbFree_h: The head of the free list containing unused PCBs
+ * - Process Queue: A circular doubly linked list structure used for managing ready and blocked processes
+ * 
+***********************************************************************************************/
+
 #include "../h/pcb.h"
 #include "../h/const.h"
 #include "../h/types.h"
-
 
 /* ------------------------------------------------------ */
 /* ------------------ Global Variables ------------------ */
@@ -27,9 +45,10 @@ void initPcbs () {
     static pcb_t pcbFreeTable[MAXPROC];
     pcbFree_h = NULL;  /* The free list is empty at first */
     
-    int i;
-    /* For each pcb in the static array, insert it into the free list */
+    int i; /* Loop counter */
     for (i = 0; i < MAXPROC; i++) {
+        /* For each pcb in the static array, insert it into the free list */
+
         freePcb(&pcbFreeTable[i]); /* add pcb to the free list */
     }
 }
@@ -47,7 +66,8 @@ pcb_PTR allocPcb () {
     pcb_t *p;
 
     if (pcbFree_h == NULL) {
-        return NULL;  /* no free pcb available */
+        /* The free list is empty */
+        return NULL;  
     }
 
     /* Remove one pcb from the free list */
@@ -89,7 +109,8 @@ pcb_PTR allocPcb () {
 **************************************************************/
 
 void freePcb (pcb_PTR p) {
-    if (p == NULL) { /* nothing to free */
+    if (p == NULL) { 
+        /* nothing to free */
         return;  
     }
 
@@ -155,8 +176,9 @@ void insertProcQ (pcb_PTR *tp, pcb_PTR p) {
         return;
     }
     
-    /* If the queue is empty then p becomes the only element. */
+    
     if (*tp == NULL) {
+        /* If the queue is empty then p becomes the only element. */
         p->p_next = p;
         p->p_prev = p;
         *tp = p;
@@ -168,8 +190,8 @@ void insertProcQ (pcb_PTR *tp, pcb_PTR p) {
         p->p_prev = tail;
         p->p_next = head;
         head->p_prev = p;
-        /* p becomes the new tail */
-        *tp = p; 
+        
+        *tp = p; /* p becomes the new tail */
     }
 }
 /**************************************************************
@@ -232,8 +254,11 @@ pcb_PTR outProcQ (pcb_PTR *tp, pcb_PTR p) {
 
     /* Loop over the circular queue until return to the head */
     do {
-        if (current == p) { /* Found the element to remove */
-            if (current->p_next == current) { /* p is the only element in the queue */
+        if (current == p) { 
+            /* Found the element to remove */
+            
+            if (current->p_next == current) { 
+                /* p is the only element in the queue */
                 *tp = NULL;
             } else {
                 /* Remove current from the list */

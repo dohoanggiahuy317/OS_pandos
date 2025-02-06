@@ -1,8 +1,24 @@
+/***********************************************************************************************
+ * Active Semaphore List Implementation
+ * ------------------------------------------
+ * This module implements and manages the Active Semaphore List,
+ * which maintains the association between semaphores and process control blocks.
+ * 
+ * Data Structures:
+ * - semd_t: Represents a semaphore descriptor, containing:
+ *   - s_semAdd: A pointer to the associated semaphore
+ *   - s_procQ: A queue of PCBs waiting on the semaphore
+ *   - s_next: A pointer to the next semaphore descriptor in the ASL
+ * 
+ * - semd_h: The head of the ASL, always initialized with a dummy node (key = 0)
+ * - semdFree_h: A free list of available semaphore descriptors, managed to optimize reuse
+ * 
+ ***********************************************************************************************/
+
 #include "../h/asl.h"
 #include "../h/pcb.h"
 #include "../h/const.h"
 #include "../h/types.h"
-
 
 /* ------------------------------------------------------ */
 /* ------------------ Global Variables ------------------ */
@@ -40,8 +56,8 @@ void freeSemd (semd_t *s) {
         return;
     }
 
-    /* If free list is empty */
     if (semdFree_h == NULL) {
+        /* If free list is empty */
         s->s_next = NULL;
         semdFree_h = s;
         return;
@@ -67,8 +83,8 @@ void freeSemd (semd_t *s) {
 semd_PTR allocSemd () {
     semd_t *newSemd;
     
-    /* If free list is empty */
     if (semdFree_h == NULL) {
+        /* If free list is empty */
         return NULL;
     }
     
@@ -141,14 +157,16 @@ static semd_t *getSemd (int *semAdd, semd_PTR *prev) {
     semd_t *curr = semd_h;  /* start at dummy head */
     semd_t *parent = NULL;
     
-    /* Traverse while the key of the current node is less than semAdd */
     while (curr != NULL && ((unsigned long)curr->s_semAdd < (unsigned long) semAdd)) {
+        /* Traverse while the key of the current node is less than semAdd */
         parent = curr;
         curr = curr->s_next;
     }
     
-    if (prev)
+    if (prev) {
         *prev = parent;
+    }
+
     return curr;
 }
 
@@ -183,10 +201,12 @@ int insertBlocked (int *semAdd, pcb_PTR p) {
     /* Search the ASL for a descriptor with key equal to semAdd */
     curr = getSemd(semAdd, &prev);
     
-    /* If not found -> allocate a new descriptor */
+    
     if (curr == NULL || ((unsigned long) curr->s_semAdd != (unsigned long) semAdd)) {
-        /* If semdFree list is empty, we cannot allocate a new descriptor. */
+        /* If not found -> allocate a new descriptor */
+
         if (semdFree_h == NULL) {
+            /* If semdFree list is empty, we cannot allocate a new descriptor. */
             return TRUE;
         }
         
@@ -230,8 +250,8 @@ pcb_PTR removeBlocked (int *semAdd) {
     semd_t *prev, *curr;
     curr = getSemd(semAdd, &prev);
 
-    /* Check that we found a descriptor with key equal to semAdd */
     if (curr == NULL || ((unsigned long) curr->s_semAdd != (unsigned long) semAdd)) {
+        /* Check that we found a descriptor with key equal to semAdd */
         return NULL;
     }
     
@@ -241,8 +261,8 @@ pcb_PTR removeBlocked (int *semAdd) {
         removed->p_semAdd = NULL;
     }
     
-    /* If the process queue is now empty, remove the semaphore descriptor from the ASL */
     if (emptyProcQ(curr->s_procQ)) {
+        /* If the process queue is now empty, remove the semaphore descriptor from the ASL */
         if (prev != NULL) {
             prev->s_next = curr->s_next;
         }
@@ -278,8 +298,8 @@ pcb_PTR outBlocked (pcb_PTR p) {
         return NULL;
     }
     
-    /* If the process queue is now empty, remove the descriptor from the ASL */
     if (emptyProcQ(curr->s_procQ)) {
+        /* If the process queue is now empty, remove the descriptor from the ASL */
         if (prev != NULL)
             prev->s_next = curr->s_next;
         freeSemd(curr); /* Return the descriptor to the free list */
@@ -302,6 +322,7 @@ pcb_t *headBlocked (int *semAdd) {
     
     curr = getSemd(semAdd, &prev);
     if (curr == NULL || ((unsigned long) curr->s_semAdd != (unsigned long) semAdd)) {
+        /* Check that we found a descriptor with key equal to semAdd */
         return NULL;
     }
     
