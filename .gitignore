@@ -8,6 +8,7 @@
 *.so
 *.umps
 kernel
+temp_testers
 
 # Packages #
 ############

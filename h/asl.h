@@ -6,10 +6,14 @@
 *  The externals declaration file for the Active Semaphore List
 *    Module.
 *
-*  Written by Mikeyg
+*  Editted by JaWeee
 */
 
 #include "../h/types.h"
+
+/***************************************************************/
+/* The Semaphore Descriptor                                    */
+/***************************************************************/
 
 extern int insertBlocked (int *semAdd, pcb_PTR p);
 extern pcb_PTR removeBlocked (int *semAdd);

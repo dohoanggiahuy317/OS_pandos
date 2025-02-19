@@ -12,7 +12,6 @@
 typedef signed int cpu_t;
 typedef unsigned int memaddr;
 
-
 /* Device Register */
 typedef struct {
     unsigned int d_status;
@@ -121,6 +120,7 @@ typedef struct pcb_t {
     
 
 } pcb_t, *pcb_PTR;
+
 
 /* semaphore descriptor (SEMD) data structure */
 typedef struct semd_t {

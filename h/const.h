@@ -26,6 +26,8 @@
 #define HIDDEN			  static
 #define EOS				    '\0'
 
+#define PSECOND    100000	/* 100 msec */
+
 #define NULL 			    ((void *)0xFFFFFFFF)
 
 /* device interrupts */
@@ -68,7 +70,7 @@
 #define KUSEG           0x80000000
 #define RAMSTART        0x20000000
 #define BIOSDATAPAGE    0x0FFFF000
-#define	PASSUPVECTOR	  0x0FFFF900
+#define	PASSUPVECTOR	0x0FFFF900
 
 /* Exceptions related constants */
 #define	PGFAULTEXCEPT	  0
