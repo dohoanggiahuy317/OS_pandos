@@ -94,11 +94,12 @@ typedef struct state_t {
 #define s_LO s_reg[30]
 
 
-/*****************************************/
-/* PHASE 1: support layer data structure */
-/*****************************************/
 
-/* process control block type */
+/**
+ * @brief Process Control Block
+ * 
+ * This data structure is used to represent a process control block
+ */
 typedef struct pcb_t {
     /* process queue fields */
     struct pcb_t    *p_next,  /* pointer to next entry */
@@ -116,19 +117,25 @@ typedef struct pcb_t {
     int *p_semAdd; /* pointer to sema4 on which process blocked */
     
     /* support layer information */
-    /*support_t *p_supportStruct;*/ /* ptr to support struct */
+    support_t *p_supportStruct; /* ptr to support struct */
     
 
 } pcb_t, *pcb_PTR;
 
-
-/* semaphore descriptor (SEMD) data structure */
+/**
+ * @brief Semaphore Descriptor
+ * 
+ * This data structure is used to represent a semaphore descriptor
+ */
 typedef struct semd_t {
     struct semd_t *s_next; /* next element on the ASL */
     int *s_semAdd; /* pointer to the semaphore*/
     pcb_t *s_procQ; /* tail pointer to a process queue */
 } semd_t, *semd_PTR;
 
-
+/**
+ * @brief Semaphore type
+ */
+typedef int semaphore;
 
 #endif

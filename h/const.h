@@ -55,7 +55,7 @@
 #define TRANCOMMAND 	3
 
 /* device common STATUS codes */
-#define UNINSTALLED		0
+#define UNINSTALLED		    0
 #define READY			    1
 #define BUSY			    3
 
@@ -72,6 +72,11 @@
 #define BIOSDATAPAGE    0x0FFFF000
 #define	PASSUPVECTOR	0x0FFFF900
 
+/* Memory Constants */
+#define UPROCSTARTADDR 0x800000B0
+#define USERSTACKTOP   0xC0000000
+#define KERNELSTACK    0x20001000
+
 /* Exceptions related constants */
 #define	PGFAULTEXCEPT	  0
 #define GENERALEXCEPT	  1
@@ -87,6 +92,30 @@
 
 /* Macro to read the TOD clock */
 #define STCK(T) ((T) = ((* ((cpu_t *) TODLOADDR)) / (* ((cpu_t *) TIMESCALEADDR))))
+
+/* Processor State--Status register constants */
+#define ALLOFF			0x0     	/* every bit in the Status register is set to 0; this will prove helpful for bitwise-OR operations */
+#define USERPON			0x00000008	/* constant for setting the user-mode on after LDST (i.e., KUp (bit 3) = 1) */
+#define IEPON			0x00000004	/* constant for enabling interrupts after LDST (i.e., IEp (bit 2) = 1) */
+#define IECON			0x00000001	/* constant for enabling the global interrupt bit (i.e., IEc (bit 0) = 1) */
+#define PLTON			0x08000000	/* constant for enabling PLT (i.e., TE (bit 27) = 1) */
+#define IMON			0x0000FF00	/* constant for setting the Interrupt Mask bits to on so interrupts are fully enabled */
+#define	IECOFF			0xFFFFFFFE	/* constant for disabling the global interrupt bit (i.e., IEc (bit 0) = 0) */
+
+
+
+
+#define PLT		5000
+#define INF_TIME		0xFFFFFFFF
+
+
+
+
+
+#define	INIT_PROCESS_CNT		0
+#define	INIT_SOFT_BLOCK_CNT		0
+
+
 
 /* Phase 1 Constant */
 #define MAXPROC 20

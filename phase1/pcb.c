@@ -93,7 +93,7 @@ pcb_PTR allocPcb () {
     p->p_time   = 0;
     p->p_semAdd = NULL;
 
-    /* p->p_supportStruct  ----->>>> IGNOREEEEE */
+    p->p_supportStruct = NULL;
 
     return p;
 }
