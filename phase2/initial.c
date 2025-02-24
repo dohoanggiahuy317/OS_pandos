@@ -9,7 +9,7 @@
 unsigned int processCount;
 unsigned int softBlockedCount;
 pcb_PTR readyQueue;
-pcb_PTR currrentProcess;
+pcb_PTR currentProcess;
 
 semaphore semaphoreInternal; /* specific purpose for internal or "soft" blocking */
 semaphore semaphoreDevices[TOTAL_IO_DEVICES];
@@ -70,7 +70,7 @@ void main() {
 
 
     readyQueue = mkEmptyProcQ();
-    currrentProcess = NULL;
+    currentProcess = NULL;
 
     LDIT(PSECOND); // Load the interval timer with the value of PSECOND (100000)
 

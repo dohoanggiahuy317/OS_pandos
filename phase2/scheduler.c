@@ -9,9 +9,9 @@
 
 
 void switchContext(pcd_PTR new_process) {
-    currrentProcess = new_process; /* setting the Current Process to curr_proc */
+    currentProcess = new_process; /* setting the Current Process to curr_proc */
     STCK(start_tod); /* updating start_tod with the value on the Time of Day Clock, as this is the time that the process will begin executing at */
-    LDST(&(currrentProcess->p_s)); /* loading the processor state for the processor state stored in pcb of the Current Process */
+    LDST(&(currentProcess->p_s)); /* loading the processor state for the processor state stored in pcb of the Current Process */
 }
 
 

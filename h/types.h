@@ -114,6 +114,11 @@ typedef struct pcb_t {
     /* process status information */
     state_t p_s;   /* processor state */
     cpu_t p_time;  /* cpu time used by proc */
+
+    /* 
+    * This pointer tells you on which semaphore (from the ASL) the process is waiting. 
+    If the process is not blocked, p_semAdd is NULL.
+    */
     int *p_semAdd; /* pointer to sema4 on which process blocked */
     
     /* support layer information */
@@ -132,6 +137,12 @@ typedef struct semd_t {
     int *s_semAdd; /* pointer to the semaphore*/
     pcb_t *s_procQ; /* tail pointer to a process queue */
 } semd_t, *semd_PTR;
+
+
+
+
+
+
 
 /**
  * @brief Semaphore type

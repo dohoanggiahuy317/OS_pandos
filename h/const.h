@@ -114,7 +114,22 @@
 
 #define	INIT_PROCESS_CNT		0
 #define	INIT_SOFT_BLOCK_CNT		0
+#define	PROCESS_INIT_START		0
 
+#define SUCCESS_CONST		0
+#define ERRORCONST			-1
+
+#define BASE_LINE        3
+#define CLOCK_INDEX      (MAX_DEVICE_COUNT - 1)
+
+/* Constants for the different line numbers an interrupt may occur on */
+#define	LINE1			1				/* constant representing line 1 */
+#define	LINE2			2				/* constant representing line 2 */
+#define	LINE3			3				/* constant representing line 3 */
+#define	LINE4			4				/* constant representing line 4 */
+#define	LINE5			5				/* constant representing line 5 */
+#define	LINE6			6				/* constant representing line 6 */
+#define	LINE7			7				/* constant representing line 7 */
 
 
 /* Phase 1 Constant */
