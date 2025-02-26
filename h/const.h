@@ -102,8 +102,24 @@
 #define IMON			0x0000FF00	/* constant for setting the Interrupt Mask bits to on so interrupts are fully enabled */
 #define	IECOFF			0xFFFFFFFE	/* constant for disabling the global interrupt bit (i.e., IEc (bit 0) = 0) */
 
+/* Device Constant */
+#define INTERRUPTS_CONST_DEVICE_0       0x00000001
+#define INTERRUPTS_CONST_DEVICE_1       0x00000002
+#define INTERRUPTS_CONST_DEVICE_2       0x00000004
+#define INTERRUPTS_CONST_DEVICE_3       0x00000008
+#define INTERRUPTS_CONST_DEVICE_4       0x00000010
+#define INTERRUPTS_CONST_DEVICE_5       0x00000020
+#define INTERRUPTS_CONST_DEVICE_6       0x00000040
+#define INTERRUPTS_CONST_DEVICE_7       0x00000080
 
-
+#define DEVICE_0    0
+#define DEVICE_1    1
+#define DEVICE_2    2
+#define DEVICE_3    3
+#define DEVICE_4    4
+#define DEVICE_5    5
+#define DEVICE_6    6
+#define DEVICE_7    7
 
 #define PLT		5000
 #define INF_TIME		0xFFFFFFFF
