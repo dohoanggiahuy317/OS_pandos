@@ -20,7 +20,7 @@
  * 
  * @note
  * There are 2 important things to remember:
- * 1. After handling the interrupt, the current process brings the exception state back (that's why I use addPigeonCurrentProcess()
+ * 1. After handling the interrupt, the current process brings the exception state back (that's why I use addPigeonCurrentProcessHelper()
  * because I feel like it is a pigeon that brings the exception state back) to notify the system that the interrupt is handled
  * 2. The cpu_time of the interrupted is charged to the interrupting process, not the current process. 
  * What this file does is update the cpu_time of the current process by 
@@ -233,8 +233,8 @@ HIDDEN void nonTimerInterruptHandler() {
      */
 
     if (pcb_to_unblock != NULL) {
-        currrentProcess->p_s.s_v0 = status_code;
-        insertProcQ(&readyQueue, currrentProcess);
+        currentProcess->p_s.s_v0 = status_code;
+        insertProcQ(&readyQueue, currentProcess);
         softBlockCount--;
         STCK(curr_TOD);
         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
@@ -252,11 +252,11 @@ HIDDEN void nonTimerInterruptHandler() {
      * 3. Set the current process time to the current process time + (current time - interrupt time)
      * 4. Switch control to the current process
      */
-    if (currrentProcess != NULL) {
-        addPigeonCurrentProcess();
+    if (currentProcess != NULL) {
+        addPigeonCurrentProcessHelper();
         setTIMER(current_process_time_left);
-        updateProcessTimeHelper(currrentProcess, start_TOD, interrupt_TOD);
-        switchContext(currrentProcess);
+        updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
+        switchContext(currentProcess);
     }
 
     scheduler();
@@ -286,7 +286,7 @@ HIDDEN void nonTimerInterruptHandler() {
 
 HIDDEN void PLTInterruptHandler() {
     /* Step 0: Get the current process, if there is no current process, panic */    
-    if (currrentProcess == NULL) {
+    if (currentProcess == NULL) {
         PANIC();
         return;
     }
@@ -295,14 +295,14 @@ HIDDEN void PLTInterruptHandler() {
     setTIMER(PLT_TIME_SLICE);
 
     /* Step 2: Copy the processor state from the BIOS Data Page */
-    addPigeonCurrentProcess();
+    addPigeonCurrentProcessHelper();
 
     /* Step  3: Update the accumulated CPU time for the current process */
     STCK(curr_TOD);
-    updateProcessTimeHelper(currrentProcess, start_TOD, curr_TOD);
+    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
 
     /* STEP 4: Transition the current process from the "running" state to the "ready" state */
-    insertProcQ(&readyQueue, currrentProcess);
+    insertProcQ(&readyQueue, currentProcess);
 
     /*  STEP 5: call the scheduler */
     scheduler();
@@ -349,11 +349,11 @@ HIDDEN void intervalTimerInterruptHandler() {
     deviceSemaphores[CLOCK_INDEX] = 0;
 
     /* Step 4: Return control to the Current Process if one exists, otherwise call scheduler. */
-    if (currrentProcess != NULL) {
+    if (currentProcess != NULL) {
         setTIMER(current_process_time_left);
-        addPigeonCurrentProcess();
-        updateProcessTimeHelper(currrentProcess, start_TOD, interrupt_TOD);
-        switchContext(currrentProcess);
+        addPigeonCurrentProcessHelper();
+        updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
+        switchContext(currentProcess);
     }
     
     /* Step 5: Call the scheduler */

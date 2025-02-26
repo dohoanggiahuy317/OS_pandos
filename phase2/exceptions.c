@@ -154,7 +154,7 @@ HIDDEN void terminateProcess(pcb_PTR terminate_process){
     int *this_semaphore = terminate_process->p_semAdd;
 
     /* If the process to be terminated is the current process */
-    if (terminate_process == currrentProcess) {
+    if (terminate_process == currentProcess) {
         
         /* Then make it orphan by remove it from the parent to ready to free later */
         outChild(terminate_process);
@@ -214,7 +214,7 @@ HIDDEN void passeren(int *this_semaphore){
 
     if (*this_semaphore < 0) { 
         /* If the value of the semaphore is less than 0, the process must be blocked */
-        blockCurr(this_semaphore);
+        blockCurrentProcessHelper(this_semaphore);
         scheduler();
     }
 
@@ -316,7 +316,7 @@ HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for
 
     /* Step 4: If the value of the semaphore is less than 0, the process must be blocked */
     if (deviceSemaphores[semaphore_index] < 0) { 
-        blockCurr(&deviceSemaphores[semaphore_index]);
+        blockCurrentProcessHelper(&deviceSemaphores[semaphore_index]);
         scheduler();
     }
 
@@ -373,14 +373,14 @@ HIDDEN void getCPUTime(){
     /* Step 1: The function places the accumulated processor time used by the requesting process in v0 */
     STCK(curr_TOD);
     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-    currrentProcess->p_s.s_v0 = currrentProcess->p_time;
+    currentProcess->p_s.s_v0 = currentProcess->p_time;
 
     /* Step 2: update the syscall CPU time for this process */
     STCK(curr_TOD);
     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
 
     /* Step 3: return control to the current process */
-    switchContext(currrentProcess);
+    switchContext(currentProcess);
 }
 
 /*********************************************************************************************
@@ -414,7 +414,7 @@ HIDDEN void waitForClock(){
 
     /* STEP 2: If the value of the semaphore is less than 0, the process must be blocked */
     if (deviceSemaphores[CLOCK_INDEX] < 0) { 
-        blockCurr(&deviceSemaphores[CLOCK_INDEX]);
+        blockCurrentProcessHelper(&deviceSemaphores[CLOCK_INDEX]);
         scheduler();
     }
 
@@ -452,13 +452,173 @@ HIDDEN getSupportData() {
 }
 
 
+/* ---------------------------------------------------------------------------------------------- */
+/* ------------------------------------- HELPER + HANDLER --------------------------------------- */
+/* ---------------------------------------------------------------------------------------------- */
 
-void blockCurr(int *sem){
-	STCK(curr_tod); /* storing the current value on the Time of Day clock into curr_tod */
-	currentProc->p_time = currentProc->p_time + (curr_tod - start_tod); /* updating the accumulated CPU time for the Current Process */
-	insertBlocked(sem, currentProc); /* blocking the Current Process on the ASL */
-	currentProc = NULL; /* setting currentProc to NULL because the old process is now blocked */ 
+/*********************************************************************************************
+ * PassUporDie
+ * 
+ * @brief
+ * When a process triggers an exception that is not one of the basic system calls (SYS1–SYS8), 
+ * the Nucleus must decide how to handle it. 
+ * The decision depends on whether the process was set up to deal with exceptions 
+ * 
+ * - Pass Up: If the process was created with a valid support structure, the Nucleus “passes up” the exception. 
+ * That means it hands off the exception to a higher-level handler in the Support Level, 
+ * which is designed to handle more complex exceptions.
+ * 
+ * - Die: If the process did not provide a support structure, then the exception is fatal. 
+ * The Nucleus will terminate (kill) the process and all its child processes. This is the “die” part.
+ * 
+ * @protocol
+ * 1. If the current process has a support structure, (Pandos page 36 - 37)
+ *      - pass up the exception
+ *      - perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process
+ * 2. If the current process does not have a support structure, we activate SYS2, which include:
+ *      - terminate the process and all its progeny
+ *      = set the Current Process pointer to NULL
+ *      - call the Scheduler to begin executing the next process
+ * 
+ * @note
+ * Not all exceptions are simple errors. Some, like page faults, might be recoverable. 
+ * Processes that are designed to handle such exceptions are created with a support structure. 
+ * The “pass up” mechanism hands the exception to these handlers so the process can attempt recovery rather than just crashing.
+ * 
+ * For processes that are not set up to handle exceptions, the OS chooses to terminate them. 
+ * This prevents processes that are not designed to cope with errors from causing unpredictable behavior or corrupting system data.
+ * 
+ * @param exceptionCode: the exception code 
+*********************************************************************************************/
+
+HIDDEN void passUpOrDie(int exceptionCode){ 
+
+    if (currentProcess->p_supportStruct != NULL){
+
+        /* Step 1.1: If the current process has a support structure, pass up the exception */
+        moveState(savedExceptState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
+        
+        STCK(curr_TOD);
+        updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+
+        /* Step 1.2: perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process */
+        LDCXT(
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_stackPtr, 
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_status,
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_pc);
+    }
+    else{
+        /* Call the SYS2 */
+        sysCallNum = SYS2_NUM;
+        systemTrapHandler();
+    }
 }
+
+
+
+
+
+
+
+
+
+/*********************************************************************************************
+ * blockCurrentProcessHelper
+ * 
+ * @brief
+ * This function is used to block the current process.
+ * The function takes the semaphore as an argument.
+ * 
+ * @protocol
+ * 1. update the timer for the current process
+ * 2. insert the current process into the blocked list
+ * 3. set the current process to NULL
+ * 
+ * @note
+ * Indicating that no process is currently being handled after an exception
+ * If the current process is being terminated due to an exception, 
+ * setting the pointer to NULL ensures that no other part of the system 
+ * accidentally tries to access or modify a process that's no longer valid.
+ * 
+ * @param this_semaphore: the semaphore to be passed
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void blockCurrentProcessHelper(int *this_semaphore){
+	STCK(curr_TOD);
+	currentProcess->p_time = currentProcess->p_time + (curr_tod - start_tod);
+    updateCurrentProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+	
+    insertBlocked(this_semaphore, currentProcess);
+    currentProcess = NULL;
+}
+
+/*********************************************************************************************
+ * addPigeonCurrentProcessHelper
+ * 
+ * @brief
+ * this function is used to add the exception state to the current process.
+ * when the current process comeback with the state, notify the OS with the exception state
+ * 
+ * @protocol
+ * 1. add the exception state to the current process
+ * 
+ * @note
+ * This function is used in the interrupts.c to add the exception state to the current process.
+ * so when the current process comeback with the state, notify the OS with the exception state that 
+ * the interrupt has been handled.
+ * 
+ * I feel like the process is like a pigeon, 
+ * and the exception state is like a message that the pigeon carries.
+ * 
+ * @param void
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void addPigeonCurrentProcessHelper(){
+    moveState(savedExceptState, &(currentProcess->p_s) ); 
+}
+
+
+
+
+
+
+
+
+
+
+/*********************************************************************************************
+ * programTrapHandler + tlbTrapHandler
+ * 
+ * @brief
+ * 
+ * 
+ * 
+ * @protocol
+ * 
+ * 
+ * 
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+void sysCallExceptHandler(){
+    passUpOrDie(GENERALEXCEPT); 
+}
+
+void tlbTrapHandler(){
+    passUpOrDie(PGFAULTEXCEPT); 
+}
+
+void programTrapHandler(){
+    passUpOrDie(GENERALEXCEPT);
+}
+
+
+
+
+
 
 
 
@@ -468,94 +628,31 @@ void blockCurr(int *sem){
 /*********************************************************************************************
  * checkUserMode
  * 
- * This function checks if a SYSCALL is being executed in user mode.
- * If it is, it sets the Cause.ExcCode to RI (Reserved Instruction)
- * and calls the Program Trap handler.
- * 
- * The status register's user mode bit can be checked using USERPON.
- * If the process was in user mode, we set Cause.ExcCode to RI (10)
+ * @brief
+ * This function is used to check if the current process is in user mode.
+ * If the current process is in user mode, then it will set the Cause.ExcCode to RI (Reserved Instruction)
  * and handle it as a program trap.
  * 
- * @param savedState: the saved exception state
+ * @protocol
+ * 1. Check if the current process is in user mode
+ * 2. If the current process is in user mode, then set the Cause.ExcCode to RI (Reserved Instruction)
+ * 3. Handle it as a program trap
+ * 
+ * @param savedState: the saved state of the current process
  * @return void
 *********************************************************************************************/
-HIDDEN void checkUserMode(state_PTR savedState) {
-    if ((savedState->s_status & USERPON) != ALLOFF) {
-        /* Set Cause.ExcCode to RI (Reserved Instruction) */
-        savedState->s_cause = (savedState->s_cause & ~EXCMASK) | (RESINSTRCODE << CAUSESHFT);
-        /* Handle as program trap */
+
+HIDDEN void checkUserMode(state_PTR current_state) {
+    if ((current_state->s_status & USERPON) != ALLOFF) {
+        
+        current_state->s_cause = (current_state->s_cause & ~EXCMASK) | (RESINSTRCODE << CAUSESHFT);
+        
         pgmTrapH();
     }
 }
 
-/**********************************************************************************************
- * updateCurrPcb
- *
- * Update the Current Process' PCB with the saved exception state
- * Use MoveState to copy the saved exception state to the 
- * Current Process' processor state
- * 
- * @param void
- * @return void
-**********************************************************************************************/
-
-HIDDEN void addPigeonCurrentProcess(){
-    moveState(savedExceptState, &(currrentProcess->p_s) ); 
-}
-
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
-/*********************************************************************************************
-*********************************************************************************************/
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Function that performs a standard Pass Up or Die operation using the provided index value. If the Current Process' p_supportStruct is
-NULL, then the exception is handled as a SYS2; the Current Process and all its progeny are terminated. (This is the "die" portion of "Pass
-Up or Die.") On the other hand, if the Current Process' p_supportStruct is not NULL, then the handling of the exception is "passed up." In
-this case, the saved exception state from the BIOS Data Page is copied to the correct sup_exceptState field of the Current Process, and 
-a LDCXT is performed using the fields from the proper sup_exceptContext field of the Current Process. */
-void passUpOrDie(int exceptionCode){ 
-    if (currentProc->p_supportStruct != NULL){
-        moveState(savedExceptState, &(currentProc->p_supportStruct->sup_exceptState[exceptionCode])); /* copying the saved exception state from the BIOS Data Page directly to the correct sup_exceptState field of the Current Process */
-        STCK(curr_tod); /* storing the current value on the Time of Day clock into curr_tod */
-        currentProc->p_time = currentProc->p_time + (curr_tod - start_tod); /* updating the accumulated CPU time for the Current Process */
-        LDCXT(currentProc->p_supportStruct->sup_exceptContext[exceptionCode].c_stackPtr, currentProc->p_supportStruct->sup_exceptContext[exceptionCode].c_status,
-        currentProc->p_supportStruct->sup_exceptContext[exceptionCode].c_pc); /* performing a LDCXT using the fields from the correct sup_exceptContext field of the Current Process */
-    }
-    else{
-        /* the Current Process' p_support_struct is NULL, so we handle it as a SYS2: the Current Process and all its progeny are terminated */
-        terminateProcess(currentProc); /* calling the termination function that "kills" the Current Process and all of its children */
-        currentProc = NULL; /* setting the Current Process pointer to NULL */
-        switchProcess(); /* calling the Scheduler to begin executing the next process */
-    }
-}
 
 /* Function that represents the entry point into this module when handling SYSCALL events. This function's tasks include, but are not
 limited to, incrementing the value of the PC in the stored exception state (to avoid an infinite loop of SYSCALLs), checking to see if an
@@ -563,7 +660,7 @@ attempt was made to request a SYSCALL while the system was in user mode (if so, 
 exception), and checking to see what SYSCALL number was requested so it can invoke an internal helper function to handle that specific
 SYSCALL. If an invalid SYSCALL number was provided (i.e., the SYSCALL number requested was nine or above), we invoke the internal
 function that performs a standard Pass Up or Die operation using the GENERALEXCEPT index value.  */
-void sysTrapH(){
+void systemTrapHandler(){
     /* initializing variables that are global to this module, as well as savedExceptState */ 
     savedExceptState = (state_PTR) BIOSDATAPAGE; /* initializing the saved exception state to the state stored at the start of the BIOS Data Page */
     sysNum = savedExceptState->s_a0; /* initializing the SYSCALL number variable to the correct number for the exception */
@@ -620,24 +717,5 @@ void sysTrapH(){
     }
 }
 
-/* Function that handles TLB exceptions. The function invokes the internal helper function that performs a standard Pass Up or Die
-operation using the PGFAULTEXCEPT index value. */
-void tlbTrapH(){
-    passUpOrDie(PGFAULTEXCEPT); /* performing a standard Pass Up or Die operation using the PGFAULTEXCEPT index value */
-}
-
-/* Function that handles Program Trap exceptions. The function invokes the internal helper function that performs a standard Pass Up or Die
-operation using the GENERALEXCEPT index value. */
-void pgmTrapH(){
-    passUpOrDie(GENERALEXCEPT); /* performing a standard Pass Up or Die operation using the GENERALEXCEPT index value */
-}
 
 
-/* Function that handles the steps needed for blocking a process. The function updates the accumulated CPU time 
-for the Current Process, and blocks the Current Process on the ASL. */
-void blockCurr(int *sem){
-    STCK(curr_tod); /* storing the current value on the Time of Day clock into curr_tod */
-    currentProc->p_time = currentProc->p_time + (curr_tod - start_tod); /* updating the accumulated CPU time for the Current Process */
-    insertBlocked(sem, currentProc); /* blocking the Current Process on the ASL */
-    currentProc = NULL; /* setting currentProc to NULL because the old process is now blocked */ 
-}
