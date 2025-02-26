@@ -102,15 +102,19 @@
 #define IMON			0x0000FF00	/* constant for setting the Interrupt Mask bits to on so interrupts are fully enabled */
 #define	IECOFF			0xFFFFFFFE	/* constant for disabling the global interrupt bit (i.e., IEc (bit 0) = 0) */
 
-/* Device Constant */
-#define INTERRUPTS_CONST_DEVICE_0       0x00000001
-#define INTERRUPTS_CONST_DEVICE_1       0x00000002
-#define INTERRUPTS_CONST_DEVICE_2       0x00000004
-#define INTERRUPTS_CONST_DEVICE_3       0x00000008
-#define INTERRUPTS_CONST_DEVICE_4       0x00000010
-#define INTERRUPTS_CONST_DEVICE_5       0x00000020
-#define INTERRUPTS_CONST_DEVICE_6       0x00000040
-#define INTERRUPTS_CONST_DEVICE_7       0x00000080
+/* Device Constant, Line constants, and Interrupt device bit map */
+#define PLT_INTERRUPT_STATUS                0x00000002
+#define INTERVAL_TIMER_INTERRUPT_STATUS     0x00000004
+#define DEVICE_INTERRUPT_STATUS             0x00000008
+
+#define INTERRUPTS_BIT_CONST_DEVICE_0       0x00000001
+#define INTERRUPTS_BIT_CONST_DEVICE_1       0x00000002
+#define INTERRUPTS_BIT_CONST_DEVICE_2       0x00000004
+#define INTERRUPTS_BIT_CONST_DEVICE_3       0x00000008
+#define INTERRUPTS_BIT_CONST_DEVICE_4       0x00000010
+#define INTERRUPTS_BIT_CONST_DEVICE_5       0x00000020
+#define INTERRUPTS_BIT_CONST_DEVICE_6       0x00000040
+#define INTERRUPTS_BIT_CONST_DEVICE_7       0x00000080
 
 #define DEVICE_0    0
 #define DEVICE_1    1
@@ -121,10 +125,29 @@
 #define DEVICE_6    6
 #define DEVICE_7    7
 
-#define PLT		5000
+#define	LINE1			1
+#define	LINE2			2
+#define	LINE3			3
+#define	LINE4			4
+#define	LINE5			5
+#define	LINE6			6
+#define	LINE7			7
+
+/* Cause register BIT MASK constants */
+#define CAUSE_INT_MASK 0x1F
+#define CAUSE_INT_SHIFT 8
+#define A8_BITS_ON      0xFF
+
+/* Clock Constants*/
+#define PLT_TIME_SLICE        5000
+#define INTERVAL_TIMER    100000
 #define INF_TIME		0xFFFFFFFF
 
 
+
+/* Device Constants */
+#define MAX_DEVICE_COUNT  (DEVINTNUM * DEVPERINT + 1)
+#define CLOCK_INDEX      (MAX_DEVICE_COUNT - 1)
 
 
 
@@ -136,16 +159,10 @@
 #define ERRORCONST			-1
 
 #define BASE_LINE        3
-#define CLOCK_INDEX      (MAX_DEVICE_COUNT - 1)
 
-/* Constants for the different line numbers an interrupt may occur on */
-#define	LINE1			1				/* constant representing line 1 */
-#define	LINE2			2				/* constant representing line 2 */
-#define	LINE3			3				/* constant representing line 3 */
-#define	LINE4			4				/* constant representing line 4 */
-#define	LINE5			5				/* constant representing line 5 */
-#define	LINE6			6				/* constant representing line 6 */
-#define	LINE7			7				/* constant representing line 7 */
+
+
+
 
 
 /* Phase 1 Constant */

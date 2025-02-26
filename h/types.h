@@ -127,6 +127,19 @@ typedef struct pcb_t {
 
 } pcb_t, *pcb_PTR;
 
+
+
+
+/* Support structure type */
+typedef struct support_t {
+	int				sup_asid;				/* process Id (asid) */
+	state_t			sup_exceptState[2];		/* stored except states */
+} support_t, *support_PTR;
+
+
+
+
+
 /**
  * @brief Semaphore Descriptor
  * 

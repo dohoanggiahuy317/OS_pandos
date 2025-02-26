@@ -14,9 +14,21 @@ pcb_PTR currentProcess;
 semaphore semaphoreInternal; /* specific purpose for internal or "soft" blocking */
 semaphore semaphoreDevices[TOTAL_IO_DEVICES];
 
+cpu_t start_TOD;
 
-
-
+/************************************************************************************************
+ * @brief
+ * The variable currentProceessorState is a pointer to the processor state saved at the time an exception occurred
+ * It stores the state captured by the CPU when an event or exception is raised. 
+ * Exception or interrupt handler use its value to either pass control to the appropriate exception handler or terminate the process.
+ * (pandos page 24)
+ * 
+ * @protocol
+ * The system can later restore the state if the exception is handled and the process resumes.
+ * The OS can examine the state to decide if the exception can be managed or if the process should be terminated.
+ * Context swtich
+*********************************************************************************************/
+state_PTR savedExceptionState;
 
 static void initPassUpVector() {
     passupvector_t *pass_up_vector = (passupvector_t *) PASSUPVECTOR; // Cast the fixed memory address PASSUPVECTOR to a pointer
@@ -28,9 +40,35 @@ static void initPassUpVector() {
 }
 
 
+
+/*********************************************************************************************
+ * updateProcessTimeHelper
+ * 
+ * @brief
+ * This function is used to update the process time of the current process.
+ * The function takes the process, start time, and end time as arguments.
+ * It updates the process time by adding the difference between the end time and start time.
+ * 
+ * @protocol
+ * 1. Update the process time by adding the difference between the end time and start time
+ * 
+ * @param pcb_PTR proc: pointer to the process
+ * @param cpu_t start: start time
+ * @param cpu_t end: end time
+ * @return void
+ ***********************************************************************************************/
+extern void updateProcessTimeHelper(pcb_PTR proc, cpu_t start, cpu_t end) {
+    proc->p_time += (end - start);
+}
+
+
+
 extern void test();
 
-static void initDeviceSemaphores() {
+
+
+
+HIDDEN void initDeviceSemaphores() {
     semaphoreInternal = 0;
     /* Set the interval timer semaphore to 0 (unblocked) 
     Initialize each device semaphore to 0 (unblocked)*/
@@ -38,6 +76,8 @@ static void initDeviceSemaphores() {
         semaphore_devices[i] = 0;
     }
 }
+
+
 
 
 

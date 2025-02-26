@@ -3,6 +3,6 @@
 
 #include "../h/types.h"
 
-extern void intTrapH();
+extern void interruptTrapHandler();
 
 #endif
