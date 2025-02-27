@@ -10,4 +10,6 @@
 extern void exceptionTrapHandler();
 extern void uTLB_RefillHandler();
 
+void addPigeonCurrentProcessHelper();
+
 #endif

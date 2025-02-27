@@ -66,9 +66,13 @@ semaphore semaphoreDevices[MAX_DEVICE_COUNT];
 
 /* The start time of the current process */
 cpu_t start_TOD;
+cpu_t curr_TOD; /* Record the time of the current process */
 
 /* the exception processor state to handle */
 state_PTR savedExceptionState;
+
+
+
 
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -141,7 +145,7 @@ void main() {
     LDIT(PSECOND); 
 
     /* Step 9: init the device semaphores */
-    initDeviceSemaphores();
+    initDeviceSemaphoresHelper();
 
     /* Step 10: allocate a new process and set its initial state */
     pcb_PTR new_process = allocPcb();
@@ -149,7 +153,7 @@ void main() {
     if (new_process != NULL) { /* if allocate is succesful */
         
         /* set the initial state of the new process */
-        RAMTOP(new_process->p_s.s_sp);
+        new_process->p_s.s_sp = RAMBASEADDR + RAMBASESIZE;
         new_process->p_s.s_pc = (memaddr) test;
         new_process->p_s.s_t9 = (memaddr) test;
         new_process->p_s.s_status = ALLOFF | IEPON | PLTON | IMON;
@@ -200,7 +204,7 @@ void main() {
  * @return void
 *********************************************************************************************/
 
-static void initPassUpVector() {
+extern void initPassUpVector() {
     /* STEP 0: create a pointer */
     passupvector_t *pass_up_vector = (passupvector_t *) PASSUPVECTOR;
 
@@ -229,8 +233,8 @@ static void initPassUpVector() {
  * @return void
  ***********************************************************************************************/
 
-void updateProcessTimeHelper(pcb_PTR proc, cpu_t start, cpu_t end) {
-    proc->p_time += (end - start);
+void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end) {
+    process->p_time += (end - start);
 }
 
 /*********************************************************************************************
@@ -254,11 +258,12 @@ void updateProcessTimeHelper(pcb_PTR proc, cpu_t start, cpu_t end) {
  * @return void
  ***********************************************************************************************/
 
-HIDDEN void initDeviceSemaphoresHelper() {
+void initDeviceSemaphoresHelper() {
     semaphoreInternal = 0;
     /* Set the interval timer semaphore to 0 (unblocked) 
     Initialize each device semaphore to 0 (unblocked)*/
-    for (int i = 0; i < MAX_DEVICE_COUNT; i++) {
+    int i;
+    for (i = 0; i < MAX_DEVICE_COUNT; i++) {
         semaphoreDevices[i] = 0;
     }
 }

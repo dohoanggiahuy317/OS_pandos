@@ -117,19 +117,8 @@ void switchContext(pcb_PTR target_process) {
 void scheduler() {
     pcb_PTR next_process;  /* pointer to next process to run */
 
-    /* If the Ready Queue is not empty, dispatch the next process */
-    if (!emptyProcQ(readyQueue)) {  
-        /* Step 1: remove the process from the head of the Ready Queue */
-        next_process = removeProcQ(&readyQueue);
-        currentProcess = next_process;
-        
-        /* Step 2: load 5 milliseconds on the PLT */
-        LDIT(PLT_TIME_SLICE);
-        
-        /* Step 3: load the state of the current process */
-        LDST(&(currentProcess->p_s));
-    }
-    else {
+    /* If the Ready Queue is not empty, dispatch the next process */\
+    if (emptyProcQ(readyQueue)) {
         /* Ready Queue is empty */
         if (processCount == 0) {
             /* No processes in the system; halt. */
@@ -150,6 +139,17 @@ void scheduler() {
             /* Deadlock detected */
             PANIC();
         }
+        
+    } else {
+        /* Step 1: remove the process from the head of the Ready Queue */
+        next_process = removeProcQ(&readyQueue);
+        currentProcess = next_process;
+        
+        /* Step 2: load 5 milliseconds on the PLT */
+        LDIT(PLT_TIME_SLICE);
+        
+        /* Step 3: load the state of the current process */
+        LDST(&(currentProcess->p_s));
     }
 }
 

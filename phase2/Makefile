@@ -22,7 +22,7 @@ DEFS = ../h/const.h ../h/types.h ../h/pcb.h ../h/asl.h \
 	../h/initial.h ../h/interrupts.h ../h/scheduler.h ../h/exceptions.h \
 	$(INCDIR)/libumps.h Makefile
 
-OBJS = initial.o interrupts.o scheduler.o exceptions.o asl.o pcb.o
+OBJS = initial.o interrupts.o scheduler.o exceptions.o ../phase1/asl.o ../phase1/pcb.o
 
 CFLAGS = -ffreestanding -ansi -Wall -c -mips1 -mabi=32 -mfp32 -mno-gpopt -G 0 -fno-pic -mno-abicalls
 

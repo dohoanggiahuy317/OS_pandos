@@ -63,8 +63,100 @@
 /* ---------------------------------------------------------------------------------------------- */
 
 int sysCallNum;
-cpu_t curr_TOD; /* Record the time of the current process */
  
+/*********************************************************************************************
+ * updateProcessTimeHelper
+ * 
+ * @brief
+ * This function move the info from one state to another state
+ * 
+ * @protocol
+ * 1. copy all the field
+ * 2. copy all the general purpose registers
+ * 
+ * @note
+ * as in C is shallow copy, we move the state from the source to the destination by carefully
+ * copying each field of the state structure.
+ * We also have to take care all thesysCallOutRangeHandler(); general purpose registers associated with the state
+ * 
+ * @param source_state: the source state
+ * @param destination_state: the destination state
+ * @return void
+*********************************************************************************************/
+
+void moveStateHelper(state_PTR source_state, state_PTR destination_state){
+
+    /* Step 1: copy all the field */
+	destination_state->s_entryHI = source_state->s_entryHI;
+	destination_state->s_cause = source_state->s_cause;
+	destination_state->s_status = source_state->s_status;
+	destination_state->s_pc = source_state->s_pc;
+
+	/* Step 2: copy the register */
+    int i;
+	for (i = 0; i < STATEREGNUM; i++){ 
+		destination_state->s_reg[i] = source_state->s_reg[i];
+	}
+}
+
+/*********************************************************************************************
+ * addPigeonCurrentProcessHelper
+ * 
+ * @brief
+ * this function is used to add the exception state to the current process.
+ * when the current process comeback with the state, notify the OS with the exception state
+ * 
+ * @protocol
+ * 1. add the exception state to the current process
+ * 
+ * @note
+ * This function is used in the interrupts.c to add the exception state to the current process.
+ * so when the current process comeback with the state, notify the OS with the exception state that 
+ * the interrupt has been handled.
+ * 
+ * I feel like the process is like a pigeon, 
+ * and the exception state is like a message that the pigeon carries.
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+
+void addPigeonCurrentProcessHelper() {
+    moveStateHelper(savedExceptionState, &(currentProcess->p_s) ); 
+}
+
+/*********************************************************************************************
+ * blockCurrentProcessHelper
+ * 
+ * @brief
+ * This function is used to block the current process.
+ * The function takes the semaphore as an argument.
+ * 
+ * @protocol
+ * 1. update the timer for the current process
+ * 2. insert the current process into the blocked list
+ * 3. set the current process to NULL
+ * 
+ * @note
+ * Indicating that no process is currently being handled after an exception
+ * If the current process is being terminated due to an exception, 
+ * setting the pointer to NULL ensures that no other part of the system 
+ * accidentally tries to access or modify a process that's no longer valid.
+ * 
+ * @param this_semaphore: the semaphore to be passed
+ * @return void
+*********************************************************************************************/
+
+void blockCurrentProcessHelper(int *this_semaphore){
+	STCK(curr_TOD);
+	currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD);
+    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+	
+    insertBlocked(this_semaphore, currentProcess);
+    currentProcess = NULL;
+}
+
+
 
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ SYSCALL ------------------------------------------- */
@@ -181,7 +273,7 @@ HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) 
  * 
  * @param terminate_process: the process to be terminated
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
 HIDDEN void terminateProcess(pcb_PTR terminate_process){ 
 
@@ -245,7 +337,7 @@ HIDDEN void terminateProcess(pcb_PTR terminate_process){
  * 
  * @param this_semaphore: the semaphore to be passed
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
 HIDDEN void passeren(int *this_semaphore){
     
@@ -338,7 +430,7 @@ HIDDEN void verhogen(int *this_semaphore){
  * @param device_number: the device number
  * @param wait_for_read: the read boolean
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
 HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for_read){
 
@@ -406,7 +498,7 @@ HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for
  * 
  * @param void
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
 HIDDEN void getCPUTime(){
 
@@ -446,7 +538,7 @@ HIDDEN void getCPUTime(){
  * 
  * @param void
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
 HIDDEN void waitForClock(){
     /* STEP 1: the current process got block for the clock, decrease the semaphore by 1 */
@@ -460,7 +552,7 @@ HIDDEN void waitForClock(){
 
     /* STEP 3: update the timer for the current process and return control to current process */
     STCK(curr_TOD);
-    updateCurrentProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
 
     /* return control to the current process */
     switchContext(currentProcess);
@@ -479,9 +571,9 @@ HIDDEN void waitForClock(){
  * 
  * @param void
  * @return void
-/*********************************************************************************************/
+*********************************************************************************************/
 
-HIDDEN getSupportData() {
+void getSupportData() {
     /* Step 1: The function place the support Struct in v0 */
     currentProcess->p_s.s_v0 = (int)(currentProcess->p_supportStruct); 
 
@@ -496,61 +588,144 @@ HIDDEN getSupportData() {
 /* ---------------------------------------------------------------------------------------------- */
 
 /*********************************************************************************************
- * exceptionTrapHandler
+ * PassUporDie
  * 
  * @brief
- * This function is used to handle exceptions. It is the entry point for all exceptions.
- * The cause of this exception is encoded in the .ExcCode field of the Cause register
- * (Cause.ExcCode) in the saved exception state. [Section 3.3-pops]
- *      - For exception code 0 (Interrupts), processing should be passed along to your
- *          Nucleus’s device interrupt handler. [Section 3.6]
- *      - For exception codes 1-3 (TLB exceptions), processing should be passed
- *          along to your Nucleus’s TLB exception handler. [Section 3.7.3]
- *      - For exception codes 4-7, 9-12 (Program Traps), processing should be passed
- *          along to your Nucleus’s Program Trap exception handler. [Section 3.7.2]
- *      - For exception code 8 (SYSCALL), processing should be passed along to
- *          your Nucleus’s SYSCALL exception handler. [Section 3.5]
- * (Pandos page 24)
+ * When a process triggers an exception that is not one of the basic system calls (SYS1–SYS8), 
+ * the Nucleus must decide how to handle it. 
+ * The decision depends on whether the process was set up to deal with exceptions 
+ * 
+ * - Pass Up: If the process was created with a valid support structure, the Nucleus “passes up” the exception. 
+ * That means it hands off the exception to a higher-level handler in the Support Level, 
+ * which is designed to handle more complex exceptions.
+ * 
+ * - Die: If the process did not provide a support structure, then the exception is fatal. 
+ * The Nucleus will terminate (kill) the process and all its child processes. This is the “die” part.
  * 
  * @protocol
- * 1. Get the execution code from the cause register
- * 2. Check the execution code and call the appropriate handler
+ * 1. If the current process has a support structure, (Pandos page 36 - 37)
+ *      - pass up the exception
+ *      - perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process
+ * 2. If the current process does not have a support structure, we activate SYS2, which include:
+ *      - terminate the process and all its progeny
+ *      = set the Current Process pointer to NULL
+ *      - call the Scheduler to begin executing the next process
+ * 
+ * @note
+ * Not all exceptions are simple errors. Some, like page faults, might be recoverable. 
+ * Processes that are designed to handle such exceptions are created with a support structure. 
+ * The “pass up” mechanism hands the exception to these handlers so the process can attempt recovery rather than just crashing.
+ * 
+ * For processes that are not set up to handle exceptions, the OS chooses to terminate them. 
+ * This prevents processes that are not designed to cope with errors from causing unpredictable behavior or corrupting system data.
+ * 
+ * @param exceptionCode: the exception code 
+*********************************************************************************************/
+
+void passUpOrDie(int exceptionCode){ 
+
+    if (currentProcess->p_supportStruct != NULL){
+
+        /* Step 1.1: If the current process has a support structure, pass up the exception */
+        moveStateHelper(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
+        
+        STCK(curr_TOD);
+        updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+
+        /* Step 1.2: perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process */
+        LDCXT(
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_stackPtr, 
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_status,
+            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_pc);
+    }
+    else{
+        /* Call the SYS2, call the systemTrapHandler as a SYSCALL */
+        sysCallNum = SYS2_NUM;
+        terminateProcess(currentProcess);
+    }
+}
+
+/*********************************************************************************************
+ * sysCallOutRangeHandler
+ * 
+ * @brief
+ * A SYSCALL exception numbered 9 and above occurs when the Current Process
+ * executes the SYSCALL instruction (Cause.ExcCode is set to 8 [Section 3.4])
+ * and the contents of a0 is greater than or equal to 9.
+ * The Nucleus SYSCALL exception handler should perform a standard Pass 
+ * Up or Die operation using the GENERALEXCEPT index value. (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
  * 
  * @param void
  * @return void
-/***********************************************************************************************/
-
-void exceptionTrapHandler() {
-    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
-    int execCode = (savedState->s_cause >> 2) & 0x1F;
-
-    switch (execCode) {
-        case 0:     // Interrupts
-            deviceInterruptHandler();
-            break;
-        case 1:     // TLB exception 
-        case 2:     // TLB exception
-        case 3:     // TLB exception 
-            tlbTrapHandler();
-            break;
-        case 8:     // SYSCALL
-            systemTrapHandler();
-            break;
-        case 4:     // Program trap
-        case 5:     // Program trap 
-        case 6:     // Program trap 
-        case 7:     // Program trap 
-        case 9:     // Program trap 
-        case 10:    // Program trap 
-        case 11:    // Program trap 
-        case 12:    // Program trap 
-            programTrapHandler();
-            break;
-        default: // Other exceptions
-            passUpOrDie(GENERALEXCEPT);
-            break;
-    }
+*********************************************************************************************/
+void sysCallOutRangeHandler(){
+    passUpOrDie(GENERALEXCEPT); 
 }
+
+/*********************************************************************************************
+ * programTrapHandler
+ * 
+ * @brief
+ * A Program Trap exception occurs when the Current Process attempts to perform
+ * some illegal or undefined action. A Program Trap exception is defined as an
+ * exception with Cause.ExcCodes of 4-7, 9-12. [Section 3.4] (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+
+void programTrapHandler(){
+    passUpOrDie(GENERALEXCEPT);
+}
+
+/*********************************************************************************************
+ * userModeTrapHandler
+ * 
+ * @brief
+ * In particular the Nucleus should simulate a Program Trap exception when a
+ * privileged service is requested in user-mode. (Pandos page 30)
+ * 
+ * @protocol
+ * 1. Call the programTrapHandler
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+
+void userModeTrapHandler() {
+    programTrapHandler();
+}
+
+
+
+/*********************************************************************************************
+ * tlbTrapHandler
+ * 
+ * @brief
+ * A TLB exception occurs when µMPS3 fails in an attempt to translate a logical
+ * address into its corresponding physical address. A TLB exception is defined as an
+ * exception with Cause.ExcCodes of 1-3. [Section 3.4] (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the PGFAULTEXCEPT index value
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+
+void tlbTrapHandler(){
+    passUpOrDie(PGFAULTEXCEPT); 
+}
+
+
+
+
 
 /*********************************************************************************************
  * systemTrapHandler
@@ -598,7 +773,7 @@ void exceptionTrapHandler() {
  * @return void
  * *********************************************************************************************/
 
-HIDDEN void systemTrapHandler() {
+void systemTrapHandler() {
 
     /* Get the BIOSDATAPAGE */
     state_PTR savedState = (state_PTR) BIOSDATAPAGE;
@@ -658,226 +833,57 @@ HIDDEN void systemTrapHandler() {
 }
 
 /*********************************************************************************************
- * tlbTrapHandler
+ * exceptionTrapHandler
  * 
  * @brief
- * A TLB exception occurs when µMPS3 fails in an attempt to translate a logical
- * address into its corresponding physical address. A TLB exception is defined as an
- * exception with Cause.ExcCodes of 1-3. [Section 3.4] (Pandos page 37)
+ * This function is used to handle exceptions. It is the entry point for all exceptions.
+ * The cause of this exception is encoded in the .ExcCode field of the Cause register
+ * (Cause.ExcCode) in the saved exception state. [Section 3.3-pops]
+ *      - For exception code 0 (Interrupts), processing should be passed along to your
+ *          Nucleus’s device interrupt handler. [Section 3.6]
+ *      - For exception codes 1-3 (TLB exceptions), processing should be passed
+ *          along to your Nucleus’s TLB exception handler. [Section 3.7.3]
+ *      - For exception codes 4-7, 9-12 (Program Traps), processing should be passed
+ *          along to your Nucleus’s Program Trap exception handler. [Section 3.7.2]
+ *      - For exception code 8 (SYSCALL), processing should be passed along to
+ *          your Nucleus’s SYSCALL exception handler. [Section 3.5]
+ * (Pandos page 24)
  * 
  * @protocol
- * 1. Call the passUpOrDie function with the PGFAULTEXCEPT index value
+ * 1. Get the execution code from the cause register
+ * 2. Check the execution code and call the appropriate handler
  * 
  * @param void
  * @return void
-/*********************************************************************************************/
+***********************************************************************************************/
 
-HIDDEN void tlbTrapHandler(){
-    passUpOrDie(PGFAULTEXCEPT); 
-}
+void exceptionTrapHandler() {
+    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
+    int execCode = (savedState->s_cause >> 2) & 0x1F;
 
-/*********************************************************************************************
- * programTrapHandler
- * 
- * @brief
- * A Program Trap exception occurs when the Current Process attempts to perform
- * some illegal or undefined action. A Program Trap exception is defined as an
- * exception with Cause.ExcCodes of 4-7, 9-12. [Section 3.4] (Pandos page 37)
- * 
- * @protocol
- * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
- * 
- * @param void
- * @return void
-/*********************************************************************************************/
-
-HIDDEN void programTrapHandler(){
-    passUpOrDie(GENERALEXCEPT);
-}
-
-/*********************************************************************************************
- * sysCallOutRangeHandler
- * 
- * @brief
- * A SYSCALL exception numbered 9 and above occurs when the Current Process
- * executes the SYSCALL instruction (Cause.ExcCode is set to 8 [Section 3.4])
- * and the contents of a0 is greater than or equal to 9.
- * The Nucleus SYSCALL exception handler should perform a standard Pass 
- * Up or Die operation using the GENERALEXCEPT index value. (Pandos page 37)
- * 
- * @protocol
- * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
- * 
- * @param void
- * @return void
-/*********************************************************************************************/
-HIDDEN void sysCallOutRangeHandler(){
-    passUpOrDie(GENERALEXCEPT); 
-}
-
-/*********************************************************************************************
- * userModeTrapHandler
- * 
- * @brief
- * In particular the Nucleus should simulate a Program Trap exception when a
- * privileged service is requested in user-mode. (Pandos page 30)
- * 
- * @protocol
- * 1. Call the programTrapHandler
- * 
- * @param void
- * @return void
-/*********************************************************************************************/
-
-HIDDEN void userModeTrapHandler() {
-    programTrapHandler();
-}
-
-/*********************************************************************************************
- * PassUporDie
- * 
- * @brief
- * When a process triggers an exception that is not one of the basic system calls (SYS1–SYS8), 
- * the Nucleus must decide how to handle it. 
- * The decision depends on whether the process was set up to deal with exceptions 
- * 
- * - Pass Up: If the process was created with a valid support structure, the Nucleus “passes up” the exception. 
- * That means it hands off the exception to a higher-level handler in the Support Level, 
- * which is designed to handle more complex exceptions.
- * 
- * - Die: If the process did not provide a support structure, then the exception is fatal. 
- * The Nucleus will terminate (kill) the process and all its child processes. This is the “die” part.
- * 
- * @protocol
- * 1. If the current process has a support structure, (Pandos page 36 - 37)
- *      - pass up the exception
- *      - perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process
- * 2. If the current process does not have a support structure, we activate SYS2, which include:
- *      - terminate the process and all its progeny
- *      = set the Current Process pointer to NULL
- *      - call the Scheduler to begin executing the next process
- * 
- * @note
- * Not all exceptions are simple errors. Some, like page faults, might be recoverable. 
- * Processes that are designed to handle such exceptions are created with a support structure. 
- * The “pass up” mechanism hands the exception to these handlers so the process can attempt recovery rather than just crashing.
- * 
- * For processes that are not set up to handle exceptions, the OS chooses to terminate them. 
- * This prevents processes that are not designed to cope with errors from causing unpredictable behavior or corrupting system data.
- * 
- * @param exceptionCode: the exception code 
-*********************************************************************************************/
-
-HIDDEN void passUpOrDie(int exceptionCode){ 
-
-    if (currentProcess->p_supportStruct != NULL){
-
-        /* Step 1.1: If the current process has a support structure, pass up the exception */
-        moveStateHelper(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
-        
-        STCK(curr_TOD);
-        updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-
-        /* Step 1.2: perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process */
-        LDCXT(
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_stackPtr, 
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_status,
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_pc);
+    switch (execCode) {
+        case 0:
+            break;
+        case 1:    
+        case 2:    
+        case 3:  
+            tlbTrapHandler();
+            break;
+        case 8:   
+            systemTrapHandler();
+            break;
+        case 4:  
+        case 5:  
+        case 6: 
+        case 7:    
+        case 9: 
+        case 10:   
+        case 11:    
+        case 12:   
+            programTrapHandler();
+            break;
+        default: 
+            passUpOrDie(GENERALEXCEPT);
+            break;
     }
-    else{
-        /* Call the SYS2, call the systemTrapHandler as a SYSCALL */
-        sysCallNum = SYS2_NUM;
-        systemTrapHandler();
-    }
-}
-
-/*********************************************************************************************
- * blockCurrentProcessHelper
- * 
- * @brief
- * This function is used to block the current process.
- * The function takes the semaphore as an argument.
- * 
- * @protocol
- * 1. update the timer for the current process
- * 2. insert the current process into the blocked list
- * 3. set the current process to NULL
- * 
- * @note
- * Indicating that no process is currently being handled after an exception
- * If the current process is being terminated due to an exception, 
- * setting the pointer to NULL ensures that no other part of the system 
- * accidentally tries to access or modify a process that's no longer valid.
- * 
- * @param this_semaphore: the semaphore to be passed
- * @return void
-/*********************************************************************************************/
-
-HIDDEN void blockCurrentProcessHelper(int *this_semaphore){
-	STCK(curr_TOD);
-	currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD);
-    updateCurrentProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-	
-    insertBlocked(this_semaphore, currentProcess);
-    currentProcess = NULL;
-}
-
-/*********************************************************************************************
- * addPigeonCurrentProcessHelper
- * 
- * @brief
- * this function is used to add the exception state to the current process.
- * when the current process comeback with the state, notify the OS with the exception state
- * 
- * @protocol
- * 1. add the exception state to the current process
- * 
- * @note
- * This function is used in the interrupts.c to add the exception state to the current process.
- * so when the current process comeback with the state, notify the OS with the exception state that 
- * the interrupt has been handled.
- * 
- * I feel like the process is like a pigeon, 
- * and the exception state is like a message that the pigeon carries.
- * 
- * @param void
- * @return void
-/*********************************************************************************************/
-
-HIDDEN void addPigeonCurrentProcessHelper(){
-    moveStateHelper(savedExceptionState, &(currentProcess->p_s) ); 
-}
-
-/*********************************************************************************************
- * updateProcessTimeHelper
- * 
- * @brief
- * This function move the info from one state to another state
- * 
- * @protocol
- * 1. copy all the field
- * 2. copy all the general purpose registers
- * 
- * @note
- * as in C is shallow copy, we move the state from the source to the destination by carefully
- * copying each field of the state structure.
- * We also have to take care all the general purpose registers associated with the state
- * 
- * @param source_state: the source state
- * @param destination_state: the destination state
- * @return void
-/*********************************************************************************************/
-
-HIDDEN void moveStateHelper(state_PTR source_state, state_PTR destination_state){
-
-    /* Step 1: copy all the field */
-	destination_state->s_entryHI = source_state->s_entryHI;
-	destination_state->s_cause = source_state->s_cause;
-	destination_state->s_status = source_state->s_status;
-	destination_state->s_pc = source_state->s_pc;
-
-	/* Step 2: copy the register */
-	for (int i = 0; i < STATEREGNUM; i++){ 
-		destination_state->s_reg[i] = source_state->s_reg[i];
-	}
 }

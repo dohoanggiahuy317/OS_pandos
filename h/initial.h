@@ -15,6 +15,9 @@ extern semaphore semaphoreInternal;
 extern semaphore semaphoreDevices[MAX_DEVICE_COUNT];
 
 extern cpu_t start_TOD;
+extern cpu_t curr_TOD;
 extern state_PTR savedExceptionState;
+
+void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end);
 
 #endif

@@ -29,7 +29,7 @@
  * 
  * @author
  * JaWeee Do
-/*********************************************************************************************/
+*********************************************************************************************/
 
 
 #include "../h/types.h"
@@ -48,7 +48,6 @@
 /* ---------------------------------------------------------------------------------------------- */
 cpu_t current_process_time_left; /* Calculate the remaining time in the time slice of the current process */
 cpu_t interrupt_TOD; /* Record the time of the interrupt */
-cpu_t curr_TOD; /* Record the time of the current process */
 
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ INTERRUPT ----------------------------------------- */
@@ -85,7 +84,7 @@ cpu_t curr_TOD; /* Record the time of the current process */
  * @return int: the device number
 *********************************************************************************************/
 
-HIDDEN int findInterruptDevice(int interrupt_line_number){
+int findInterruptDevice(int interrupt_line_number){
 
     /* tells the compiler to interpret the memory starting at RAMBASEADDR as a structure of type devregarea_t */
     devregarea_t *device_register_area;
@@ -95,19 +94,19 @@ HIDDEN int findInterruptDevice(int interrupt_line_number){
     memaddr device_bit_map = device_register_area->interrupt_dev[interrupt_line_number - BASE_LINE];
 
     /* check the device bit map to find the device that generated the interrupt */
-    if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_0 != ALLOFF) {
+    if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_0) != ALLOFF) {
         return DEVICE_0;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_1 != ALLOFF) {
+    } else if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_1) != ALLOFF) {
         return DEVICE_1;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_2 != ALLOFF) {
+    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_2) != ALLOFF) {
         return DEVICE_2;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_3 != ALLOFF) {
+    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_3) != ALLOFF) {
         return DEVICE_3;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_4 != ALLOFF) {
+    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_4) != ALLOFF) {
         return DEVICE_4;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_5 != ALLOFF) {
+    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_5) != ALLOFF) {
         return DEVICE_5;
-    } else if (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_6 != ALLOFF) {
+    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_6) != ALLOFF) {
         return DEVICE_6;
     }
 
@@ -130,7 +129,7 @@ HIDDEN int findInterruptDevice(int interrupt_line_number){
  * @return void
  ***********************************************************************************************/
 
-HIDDEN void nonTimerInterruptHandler() {
+void nonTimerInterruptHandler() {
     /* tells the compiler to interpret the memory starting at RAMBASEADDR as a structure of type devregarea_t */
     devregarea_t *device_register_area;
     device_register_area = (devregarea_t *) RAMBASEADDR;
@@ -212,8 +211,7 @@ HIDDEN void nonTimerInterruptHandler() {
             /* perform the V operation */
             pcb_to_unblock = removeBlocked(&semaphoreDevices[device_index + DEVPERINT]);
 		    semaphoreDevices[device_index + DEVPERINT]++;
-	}
-	else{
+	} else {
 		status_code = device_register_area->devreg[device_index].t_recv_status;
 		device_register_area->devreg[device_index].t_recv_status = ACK;
 		pcb_to_unblock = removeBlocked(&semaphoreDevices[device_index]);

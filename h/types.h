@@ -93,7 +93,32 @@ typedef struct state_t {
 #define s_HI s_reg[29]
 #define s_LO s_reg[30]
 
+/*********************************************************************************************
+ * @brief Context Descriptor
+ * 
+ * This data structure is used to represent a context descriptor
+*********************************************************************************************/
 
+typedef struct context_t {
+    /* process context fields */
+    unsigned int    c_stackPtr, /* stack pointer value */
+                    c_status, /* status reg value */
+                    c_pc; /* PC address */
+} context_t, *context_PTR;
+
+
+
+/*********************************************************************************************
+ * @brief Support Descriptor
+ * 
+ * This data structure is used to represent a support descriptor
+*********************************************************************************************/
+
+typedef struct support_t {
+    int         sup_asid; /* Process Id (asid) */
+    state_t     sup_exceptState[2]; /* stored excpt states */
+    context_t   sup_exceptContext[2]; /* pass up contexts */
+} support_t, *support_PTR;
 
 /*********************************************************************************************
  * @brief Process Control Block
@@ -128,30 +153,8 @@ typedef struct pcb_t {
 
 } pcb_t, *pcb_PTR;
 
-/*********************************************************************************************
- * @brief Context Descriptor
- * 
- * This data structure is used to represent a context descriptor
-*********************************************************************************************/
 
-typedef struct context_t {
-    /* process context fields */
-    unsigned int    c_stackPtr, /* stack pointer value */
-                    c_status, /* status reg value */
-                    c_pc; /* PC address */
-} context_t, *context_PTR;
 
-/*********************************************************************************************
- * @brief Support Descriptor
- * 
- * This data structure is used to represent a support descriptor
-*********************************************************************************************/
-
-typedef struct support_t {
-    int         sup_asid; /* Process Id (asid) */
-    state_t     sup_exceptState[2]; /* stored excpt states */
-    context_t   sup_exceptContext[2]; /* pass up contexts */
-} support_t, *support_PTR;
 
 /*********************************************************************************************
  * @brief Semaphore Descriptor
@@ -164,10 +167,6 @@ typedef struct semd_t {
     int *s_semAdd; /* pointer to the semaphore*/
     pcb_t *s_procQ; /* tail pointer to a process queue */
 } semd_t, *semd_PTR;
-
-
-
-
 
 
 
