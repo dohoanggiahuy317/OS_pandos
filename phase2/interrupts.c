@@ -91,7 +91,7 @@ int findInterruptDevice(int interrupt_line_number){
     device_register_area = (devregarea_t *) RAMBASEADDR;
 
     /* get the device bit map from the interrupt_dev address */
-    memaddr device_bit_map = device_register_area->interrupt_dev[interrupt_line_number - BASE_LINE];
+    unsigned int device_bit_map = device_register_area->interrupt_dev[interrupt_line_number - BASE_LINE];
 
     /* check the device bit map to find the device that generated the interrupt */
     if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_0) != ALLOFF) {
@@ -160,11 +160,30 @@ void nonTimerInterruptHandler() {
      *      - Multiply number of devices per interrupt line.
      *      - Add the device number  
      */
-    int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;
+   /* int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;*/
+
+int interrupt_line_number;
+/* determining exactly which line number the interrupt occurred on so we can initialize lineNum */
+	if (((savedExceptionState->s_cause) & 0x00000800) != ALLOFF){ /* if there is an interrupt on line 3 */
+		interrupt_line_number = LINE3; /* initializing lineNum to 3, since the highest-priority interrupt occurred on line 3 */
+	}
+	else if (((savedExceptionState->s_cause) & 0x00001000) != ALLOFF){ /* if there is an interrupt on line 4 */
+		interrupt_line_number = LINE4; /* initializing lineNum to 4, since the highest-priority interrupt occurred on line 4 */
+	}
+	else if (((savedExceptionState->s_cause) & 0x00002000) != ALLOFF){ /* if there is an interrupt on line 5 */
+		interrupt_line_number = LINE5; /* initializing lineNum to 5, since the highest-priority interrupt occurred on line 5 */
+	}
+	else if (((savedExceptionState->s_cause) & 0x00004000) != ALLOFF){ /* if there is an interrupt on line 6 */
+		interrupt_line_number = LINE6; /* initializing lineNum to 6, since the highest-priority interrupt occurred on line 6 */
+	}
+	else{ /* otherwise, there is an interrupt on line 7 */
+		interrupt_line_number = LINE7; /* initializing lineNum to 7, since the highest-priority interrupt occurred on line 7 */
+	}
+
     int device_num = findInterruptDevice(interrupt_line_number);
 
     /* get the device index from the interrupt line number (similar to semaphore index in exception.c)*/
-    int device_index = (interrupt_line_number - BASE_LINE) * DEVPERINT + device_num; 
+    int device_index = ((interrupt_line_number - BASE_LINE) * DEVPERINT) + device_num; 
 
 
     /**
@@ -213,7 +232,7 @@ void nonTimerInterruptHandler() {
 		    semaphoreDevices[device_index + DEVPERINT]++;
 	} else {
 		status_code = device_register_area->devreg[device_index].t_recv_status;
-		device_register_area->devreg[device_index].t_recv_status = ACK;
+		device_register_area->devreg[device_index].t_recv_command = ACK;
 		pcb_to_unblock = removeBlocked(&semaphoreDevices[device_index]);
 		semaphoreDevices[device_index]++;
 	}
@@ -230,13 +249,13 @@ void nonTimerInterruptHandler() {
      * 2. Insert the PCB to the ready queue
      */
 
-    if (pcb_to_unblock != NULL) {
+    /*if (pcb_to_unblock != NULL) {
         pcb_to_unblock->p_s.s_v0 = status_code;
         insertProcQ(&readyQueue, pcb_to_unblock);
         softBlockedCount--;
         STCK(curr_TOD);
         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
-    }
+    }*/
 
     /** STEP 7: Switch Control to the current process
      * 
@@ -250,14 +269,40 @@ void nonTimerInterruptHandler() {
      * 3. Set the current process time to the current process time + (current time - interrupt time)
      * 4. Switch control to the current process
      */
-    if (currentProcess != NULL) {
+    /*if (currentProcess != NULL) {
         addPigeonCurrentProcessHelper();
         setTIMER(current_process_time_left);
         updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
         switchContext(currentProcess);
     }
 
-    scheduler();
+    scheduler();*/
+
+	if (pcb_to_unblock == NULL){ /* if the supposedly unblocked pcb is NULL, we want to return control to the Current Process */
+		if (currentProcess != NULL){ /* if there is a Current Process to return control to */
+			addPigeonCurrentProcessHelper(); /* update the Current Process' processor state before resuming process' execution */
+			currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD); /* updating the accumulated processor time used by the Current Process */
+			setTIMER(current_process_time_left); /* setting the PLT to the remaining time left on the Current Process' quantum when the interrupt handler was first entered*/
+			switchContext(currentProcess); /* calling the function that returns control to the Current Process */
+		}
+		scheduler(); /*calling the Scheduler to begin execution of the next process on the Ready Queue (if there is no Current Process to return control to) */
+	}
+
+	pcb_to_unblock->p_s.s_v0 = status_code; /* placing the stored off status code in the newly unblocked pcb's v0 register */
+	insertProcQ(&readyQueue, pcb_to_unblock); /* inserting the newly unblocked pcb on the Ready Queue to transition it from a "blocked" state to a "ready" state */
+	softBlockedCount--; /* decrementing the value of softBlockCnt, since we have unblocked a previosuly-started process that was waiting for I/O */
+	if (currentProcess != NULL){ /* if there is a Current Process to return control to */
+		addPigeonCurrentProcessHelper(); /* update the Current Process' processor state before resuming process' execution */
+		setTIMER(current_process_time_left); /* setting the PLT to the remaining time left on the Current Process' quantum when the interrupt handler was first entered*/
+		currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD); /* updating the accumulated processor time used by the Current Process */
+		STCK(curr_TOD); /* storing the current value on the Time of Day clock into curr_tod */
+		pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD); /* charging the process associated with the I/O interrupt with the CPU time needed to handle the interrupt */
+		switchContext(currentProcess); /* calling the function that returns control to the Current Process */
+	}
+	scheduler(); 
+
+
+
 }   
 
 /*********************************************************************************************

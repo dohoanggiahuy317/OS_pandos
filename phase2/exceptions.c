@@ -777,14 +777,18 @@ void systemTrapHandler() {
 
     /* Get the BIOSDATAPAGE */
     state_PTR savedState = (state_PTR) BIOSDATAPAGE;
-    savedState->s_pc += WORDLEN;
     sysCallNum = savedState->s_a0;
+    savedState->s_pc += WORDLEN;
     
     /* STEP 1: redirect if it is usermode and set the exception code to RI */
     if (( (savedState->s_status) & USERPON) != ALLOFF) {
-        savedState->s_cause &= ~(CAUSE_INT_MASK << EXC_CODE_SHIFT);
+
+        savedState->s_cause = (savedState->s_cause) & 0xFFFFFF28; /* setting the Cause.ExcCode bits in the stored exception state to RI (10) */
+		programTrapHandler();
+
+        /*savedState->s_cause &= ~(CAUSE_INT_MASK << EXC_CODE_SHIFT);
         savedState->s_cause |= (EXC_RESERVED_INSTRUCTION << EXC_CODE_SHIFT);
-        userModeTrapHandler();
+        userModeTrapHandler();*/
     }
 
     /* STEP 2: check if the syscall number is in range */
@@ -793,7 +797,7 @@ void systemTrapHandler() {
     }
 
     /* STEP 3: add the state to the current process */
-    addPigeonCurrentProcessHelper();
+    addPigeonCurrentProcessHelper(currentProcess);
  
     /* STEP 4: Call the appropriate syscall function */
     switch (sysCallNum) {
@@ -812,12 +816,12 @@ void systemTrapHandler() {
             break;
         case SYS4_NUM:
             verhogen((int *)(currentProcess->p_s.s_a1));
-
+            break;
         case SYS5_NUM:
             waitForIO(currentProcess->p_s.s_a1,
                       currentProcess->p_s.s_a2,
                       currentProcess->p_s.s_a3);
-                      break;
+            break;
         case SYS6_NUM:
             getCPUTime();
             break;
@@ -827,8 +831,7 @@ void systemTrapHandler() {
         case SYS8_NUM:
             getSupportData();
             break;
-        default:
-            programTrapHandler();
+    
     }
 }
 
@@ -863,6 +866,7 @@ void exceptionTrapHandler() {
 
     switch (execCode) {
         case 0:
+            interruptTrapHandler();
             break;
         case 1:    
         case 2:    
