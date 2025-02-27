@@ -1,3 +1,41 @@
+/**********************************************************************************************
+ * scheduler.c
+ * 
+ * @brief
+ * This file contains essential routines for process management in the operating system.
+ * It provides two main functionalities:
+ * Context Switching: The switchContext function enables the processor to switch
+ * from executing one process to another by saving the current time and loading the
+ * state of the target process. This is critical to implementing preemptive multitasking.
+ *
+ * Process Scheduling: The scheduler function manages which process should be executed 
+ * next. It removes a process from the ready queue, sets it as the current process, and 
+ * activates it by loading its state. If the ready queue is empty, the scheduler handles 
+ * the situation by:
+ * - Halting the system when no processes remain,
+ * - Allowing the system to wait if processes are blocked on events (via soft-block count),
+ * - Detecting a deadlock if there are processes available but none can execute.
+ *
+ * Without proper context switching and scheduling, processes could not share the CPU effectively, leading 
+ * to poor resource utilization and system instability.
+ *
+ * @def
+ * - switchContext(pcb_PTR target_process)
+ * The purpose of switching contexts is to save the current execution state, update the
+ * current process pointer, record the current time so that it can resume execution. 
+ *
+ * @note
+ * In the scheduler (LAST CASE), if the ready queue is empty and there are still processes in the system 
+ *  but no processes are ready to run, it indicates that all processes 
+ * are either waiting for some event or are in a state that prevents further progress.
+ * When softBlockedCount is 0 , this signals a deadlock 
+ * because processes are neither ready to execute nor waiting for an interrupt or event to free them.
+ * In such a condition, the system calls PANIC() to halt operations as the system cannot proceed.
+ *
+ * @author
+ * JaWeee Do
+ **********************************************************************************************/
+
 #include "../h/asl.h"
 #include "../h/types.h"
 #include "../h/const.h"
@@ -8,33 +46,110 @@
 #include "/usr/include/umps3/umps/libumps.h"
 
 
-void switchContext(pcd_PTR new_process) {
-    currentProcess = new_process; /* setting the Current Process to curr_proc */
-    STCK(start_tod); /* updating start_tod with the value on the Time of Day Clock, as this is the time that the process will begin executing at */
-    LDST(&(currentProcess->p_s)); /* loading the processor state for the processor state stored in pcb of the Current Process */
+/**********************************************************************************************
+ * switchContext
+ * 
+ * @brief
+ * This function is used to switch the context of the current process.
+ * The function takes the target process as an argument and sets the current process to the 
+ * target process. It then saves the current time and loads the state of the target process.
+ *
+ * @def switchContext(pcb_PTR target_process)
+ * 
+ * @purpose
+ * - Change the execution context from one process to another.
+ * - Record the current time for accounting or tracking purposes.
+ * - Resume execution of the new process by loading its state.
+ *
+ * @protocol
+ * 1. Set the current process to the target process.
+ * 2. Save the current time using the system timer (STCK).
+ * 3. Load the target process's state using LDST.
+ * 
+ * @param pcb_PTR target_process: pointer to the process to be switched in.
+ * @return void
+ * **********************************************************************************************/
+
+void switchContext(pcb_PTR target_process) {
+    /* Step 1: set the process */
+    currentProcess = target_process;
+
+    /* Step 2: save the current time */
+    STCK(start_TOD);
+
+    /* Step 3: load the state of the target process */
+    LDST(&(currentProcess->p_s));
 }
 
+
+/**********************************************************************************************
+ * scheduler
+ * 
+ * @brief
+ * This function schedules the next process to run by dispatching the next process from
+ * the Ready Queue. The scheduling routine ensures that the processor executes the available
+ * tasks in a fair and orderly manner.
+ *
+ * @protocol
+ * 1. If the Ready Queue is not empty:
+ *    - Remove the process from the head of the Ready Queue.
+ *    - Set currentProcess to the removed process.
+ *    - Load 5 milliseconds on the Programmable Interval Timer (PLT).
+ *    - Load the state of the current process to resume its execution.
+ * 2. If the Ready Queue is empty:
+ *    - If processCount is 0:
+ *         - There are no processes in the system; the system halts via HALT().
+ *    - If softBlockedCount is >0:
+ *         - Some processes are waiting for an event; the system enables interrupts,
+ *           disables the PLT by loading a very large time value, and waits for an event.
+ *    - Otherwise:
+ *         - A deadlock has been detected; the system cannot make progress and PANIC() is invoked.
+ *
+ * Note (Deadlock Explanation):
+ * When the Ready Queue is empty and softBlockedCount is 0 while there are still processes
+ * in the system (processCount > 0), it indicates that all processes are neither ready nor waiting
+ * for an external event. This scenario represents a deadlock, as no processes can make progress.
+ * In this case, the system calls PANIC() to indicate an unrecoverable system state.
+ * 
+ * @return void
+ * **********************************************************************************************/
 
 void scheduler() {
-	currentProcess = removeProcQ(&readyQueue); /* removing the pcb from the head of the ReadyQueue and storing its pointer in currentProc */
-	if (currentProcess != NULL){ /* if the Ready Queue is not empty */
-		setTIMER(PLT); /* loading five milliseconds on the processor's Local Timer (PLT) */
-		switchContext(currentProcess); /* invoking the internal function that will perform the LDST on the Current Process' processor state */
-	}
+    pcb_PTR next_process;  /* pointer to next process to run */
 
-	/* NOW THE ReadyQueue is empty. */
-	if (processCount == INIT_PROCESS_CNT){ /* if the number of started, but not yet terminated, processes is zero */
-		HALT(); /* invoking the HALT() function to halt the system and print a regular shutdown message on terminal 0 */
-	}
-	
-	if ((procCnt > INIT_PROCESS_CNT) && (softBlockCnt > INIT_SOFT_BLOCK_CNT)){ /* if the number of started, but not yet terminated, processes is greater than zero and there's at least one such process is "blocked" */
-		setSTATUS(ALLOFF | IMON | IECON); /* enabling interrupts for the Status register so we can execute the WAIT instruction */
-		setTIMER(INF_TIME); /* loading the PLT with a very large value so that the first interrupt that occurs after entering a WAIT state is not for the PLT */
-		WAIT(); /* invoking the WAIT() function to idle the processor, as it needs to wait for a device interrupt to occur */
-	}
-
-	/* If procCnt is zero, there are no processes at all, so the system halts.
-If procCnt > 0 and softBlockCnt > INITIALSFTBLKCNT, some process is waiting for an event, so the system idles (by calling WAIT) until an interrupt occurs.
-But if procCnt > 0 and softBlockCnt is exactly at its initial count (softBlockCnt == INITIALSFTBLKCNT), that means there are processes that have been started and not terminated, yet none of them are blocked waiting for an event. And since the Ready Queue is empty, it means these processes are not in a runnable state either. This situation is unexpected and implies a deadlock: processes exist, but none can proceed or be unblocked. That's why the OS calls PANIC. */
-	PANIC(); /* invoking the PANIC() function to stop the system and print a warning message on terminal 0 */
+    /* If the Ready Queue is not empty, dispatch the next process */
+    if (!emptyProcQ(readyQueue)) {  
+        /* Step 1: remove the process from the head of the Ready Queue */
+        next_process = removeProcQ(&readyQueue);
+        currentProcess = next_process;
+        
+        /* Step 2: load 5 milliseconds on the PLT */
+        LDIT(PLT_TIME_SLICE);
+        
+        /* Step 3: load the state of the current process */
+        LDST(&(currentProcess->p_s));
+    }
+    else {
+        /* Ready Queue is empty */
+        if (processCount == 0) {
+            /* No processes in the system; halt. */
+            HALT();
+        }
+        else if (softBlockedCount > 0) {
+            /* There are processes in the system but some are blocked waiting for an event.
+               Prepare to wait:
+                 - Enable interrupts in the status register.
+                 - Disable the PLT by loading it with a very large value (INF_TIME).
+                 - Execute the WAIT instruction to wait for an event.
+            */
+            setSTATUS(ALLOFF | IMON | IECON);
+            setTIMER(INF_TIME);
+            WAIT();
+        }
+        else {
+            /* Deadlock detected */
+            PANIC();
+        }
+    }
 }
+

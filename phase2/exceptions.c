@@ -110,7 +110,7 @@ HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) 
     if (new_pcb != NULL){ 
 
         /* S2: initializes the new process' state from a1 */
-        moveState(state_process, &(new_pcb->p_s)); 
+        moveStateHelper(state_process, &(new_pcb->p_s)); 
 
         /* S3: p_supportStruct from a2 */
         new_pcb->p_supportStruct = support_process; 
@@ -773,7 +773,7 @@ HIDDEN void passUpOrDie(int exceptionCode){
     if (currentProcess->p_supportStruct != NULL){
 
         /* Step 1.1: If the current process has a support structure, pass up the exception */
-        moveState(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
+        moveStateHelper(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
         
         STCK(curr_TOD);
         updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
@@ -815,7 +815,7 @@ HIDDEN void passUpOrDie(int exceptionCode){
 
 HIDDEN void blockCurrentProcessHelper(int *this_semaphore){
 	STCK(curr_TOD);
-	currentProcess->p_time = currentProcess->p_time + (curr_tod - start_tod);
+	currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD);
     updateCurrentProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
 	
     insertBlocked(this_semaphore, currentProcess);
@@ -845,5 +845,39 @@ HIDDEN void blockCurrentProcessHelper(int *this_semaphore){
 /*********************************************************************************************/
 
 HIDDEN void addPigeonCurrentProcessHelper(){
-    moveState(savedExceptionState, &(currentProcess->p_s) ); 
+    moveStateHelper(savedExceptionState, &(currentProcess->p_s) ); 
+}
+
+/*********************************************************************************************
+ * updateProcessTimeHelper
+ * 
+ * @brief
+ * This function move the info from one state to another state
+ * 
+ * @protocol
+ * 1. copy all the field
+ * 2. copy all the general purpose registers
+ * 
+ * @note
+ * as in C is shallow copy, we move the state from the source to the destination by carefully
+ * copying each field of the state structure.
+ * We also have to take care all the general purpose registers associated with the state
+ * 
+ * @param source_state: the source state
+ * @param destination_state: the destination state
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void moveStateHelper(state_PTR source_state, state_PTR destination_state){
+
+    /* Step 1: copy all the field */
+	destination_state->s_entryHI = source_state->s_entryHI;
+	destination_state->s_cause = source_state->s_cause;
+	destination_state->s_status = source_state->s_status;
+	destination_state->s_pc = source_state->s_pc;
+
+	/* Step 2: copy the register */
+	for (int i = 0; i < STATEREGNUM; i++){ 
+		destination_state->s_reg[i] = source_state->s_reg[i];
+	}
 }

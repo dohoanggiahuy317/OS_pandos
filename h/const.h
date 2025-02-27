@@ -66,7 +66,7 @@
 /* Memory related constants */
 #define KSEG0           0x00000000
 #define KSEG1           0x20000000
-#define KSEG2           0x40000000f
+#define KSEG2           0x40000000
 #define KUSEG           0x80000000
 #define RAMSTART        0x20000000
 #define BIOSDATAPAGE    0x0FFFF000
@@ -151,9 +151,9 @@
 #define EXC_CODE_SHIFT                   2     
 
 /* Clock Constants*/
-#define PLT_TIME_SLICE        5000
-#define INTERVAL_TIMER    100000
-#define INF_TIME		0xFFFFFFFF
+#define PLT_TIME_SLICE          5000
+#define INTERVAL_TIMER          100000
+#define INF_TIME		        0xFFFFFFFF
 
 
 /* Device Constants */

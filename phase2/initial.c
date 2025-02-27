@@ -200,7 +200,6 @@ void main() {
  * @return void
 *********************************************************************************************/
 
-
 static void initPassUpVector() {
     /* STEP 0: create a pointer */
     passupvector_t *pass_up_vector = (passupvector_t *) PASSUPVECTOR;

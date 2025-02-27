@@ -1,10 +1,10 @@
 #ifndef NUCL_INITIAL
 #define NUCL_INITIAL
 
-#include "pcb.h"
-#include "asl.h"
-#include "const.h"
-#include "types.h"
+#include "../h/const.h"
+#include "../h/types.h"
+#include "../h/pcb.h"
+#include "../h/asl.h"
 
 extern unsigned int processCount;
 extern unsigned int softBlockedCount;
@@ -14,7 +14,7 @@ extern pcb_PTR currentProcess;
 extern semaphore semaphoreInternal;
 extern semaphore semaphoreDevices[MAX_DEVICE_COUNT];
 
-cpu_t start_TOD;
-state_PTR savedExceptionState;
+extern cpu_t start_TOD;
+extern state_PTR savedExceptionState;
 
 #endif
