@@ -161,7 +161,7 @@ HIDDEN void nonTimerInterruptHandler() {
      *      - Multiply number of devices per interrupt line.
      *      - Add the device number  
      */
-    int interrupt_line_number = ((savedExceptState->s_cause >> 11) & 0x1F) + 3;
+    int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;
     int device_num = findInterruptDevice(interrupt_line_number);
 
     /* get the device index from the interrupt line number (similar to semaphore index in exception.c)*/
@@ -210,14 +210,14 @@ HIDDEN void nonTimerInterruptHandler() {
 		    device_register_area->devreg[device_index].t_transm_command = ACK;
 
             /* perform the V operation */
-            pcb_to_unblock = removeBlocked(&deviceSemaphores[device_index + DEVPERINT]);
-		    deviceSemaphores[device_index + DEVPERINT]++;
+            pcb_to_unblock = removeBlocked(&semaphoreDevices[device_index + DEVPERINT]);
+		    semaphoreDevices[device_index + DEVPERINT]++;
 	}
 	else{
 		status_code = device_register_area->devreg[device_index].t_recv_status;
 		device_register_area->devreg[device_index].t_recv_status = ACK;
-		pcb_to_unblock = removeBlocked(&deviceSemaphores[device_index]);
-		deviceSemaphores[device_index]++;
+		pcb_to_unblock = removeBlocked(&semaphoreDevices[device_index]);
+		semaphoreDevices[device_index]++;
 	}
 
     /**
@@ -235,7 +235,7 @@ HIDDEN void nonTimerInterruptHandler() {
     if (pcb_to_unblock != NULL) {
         currentProcess->p_s.s_v0 = status_code;
         insertProcQ(&readyQueue, currentProcess);
-        softBlockCount--;
+        softBlockedCount--;
         STCK(curr_TOD);
         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
     }
@@ -339,14 +339,14 @@ HIDDEN void intervalTimerInterruptHandler() {
     setTIMER(INTERVAL_TIMER);
 
     /* Step 2: Unblock ALL pcbs blocked on the Pseudo-clock semaphore */
-    while (headBlocked(&deviceSemaphores[CLOCK_INDEX]) != NULL) {
-        pcb_to_unblock = removeBlocked(&deviceSemaphores[CLOCK_INDEX]);
+    while (headBlocked(&semaphoreDevices[CLOCK_INDEX]) != NULL) {
+        pcb_to_unblock = removeBlocked(&semaphoreDevices[CLOCK_INDEX]);
         insertProcQ(&readyQueue, pcb_to_unblock);
-        softBlockCount--;
+        softBlockedCount--;
     }
 
     /* Step 3: Reset the Pseudo-clock semaphore to zero. */
-    deviceSemaphores[CLOCK_INDEX] = 0;
+    semaphoreDevices[CLOCK_INDEX] = 0;
 
     /* Step 4: Return control to the Current Process if one exists, otherwise call scheduler. */
     if (currentProcess != NULL) {
@@ -390,11 +390,11 @@ void interruptTrapHandler() {
     current_process_time_left = getTIMER();
 
     /* save the exception state from the BIOS data page */
-    savedExceptState = (state_PTR) BIOSDATAPAGE;
+    savedExceptionState = (state_PTR) BIOSDATAPAGE;
 
     /* extract the pending interrupt bits (bits 8-15 of the Cause register) */
     unsigned int pending;
-    pending = (savedExceptState->s_cause >> 8) & 0xFF;
+    pending = (savedExceptionState->s_cause >> 8) & 0xFF;
     pending &= 0xFE; /* ignore interrupt line 0 as per uniprocessor design */
 
     /* Check for PLT interrupt (interrupt line 1, highest priority) */

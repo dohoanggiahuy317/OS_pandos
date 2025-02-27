@@ -1,5 +1,5 @@
-#ifndef INTERRUPTS
-#define INTERRUPTS
+#ifndef INTERRUPTS_H
+#define INTERRUPTS_H
 
 #include "../h/types.h"
 

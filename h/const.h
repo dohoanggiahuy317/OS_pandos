@@ -133,16 +133,27 @@
 #define	LINE6			6
 #define	LINE7			7
 
+/* SYSCALL constant */
+#define	SYS1_NUM			1
+#define	SYS2_NUM			2
+#define	SYS3_NUM			3
+#define	SYS4_NUM			4
+#define	SYS5_NUM			5
+#define	SYS6_NUM			6
+#define	SYS7_NUM			7
+#define	SYS8_NUM			8
+
 /* Cause register BIT MASK constants */
-#define CAUSE_INT_MASK 0x1F
-#define CAUSE_INT_SHIFT 8
-#define A8_BITS_ON      0xFF
+#define CAUSE_INT_MASK                  0x1F
+#define CAUSE_INT_SHIFT                 8
+#define A8_BITS_ON                      0xFF
+#define EXC_RESERVED_INSTRUCTION        10  
+#define EXC_CODE_SHIFT                   2     
 
 /* Clock Constants*/
 #define PLT_TIME_SLICE        5000
 #define INTERVAL_TIMER    100000
 #define INF_TIME		0xFFFFFFFF
-
 
 
 /* Device Constants */

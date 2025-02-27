@@ -9,9 +9,12 @@
 extern unsigned int processCount;
 extern unsigned int softBlockedCount;
 extern pcb_PTR readyQueue;
-extern pcb_PTR currrentProcess;
+extern pcb_PTR currentProcess;
 
 extern semaphore semaphoreInternal;
-extern semaphore semaphore_devices[TOTAL_IO_DEVICES];
+extern semaphore semaphoreDevices[MAX_DEVICE_COUNT];
+
+cpu_t start_TOD;
+state_PTR savedExceptionState;
 
 #endif

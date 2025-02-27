@@ -1,11 +1,51 @@
 
-/*****
+/**********************************************************************************************
+ * exceptions.c
  * 
- * Among the 8 syscalls, every syscall except SYS2 (terminateProcess) is designed to return control to the current process. In SYS2 the process is terminated, so control isn’t returned to the original process but instead to a newly scheduled one. All the other syscalls (SYS1, SYS3, SYS4, SYS5, SYS6, SYS7, SYS8) update the process's CPU time and then call the function (switchContext) that resumes the executing process.
+ * @brief
+ * This file provides the core implementation for handling system call exceptions
+ * in our operating system design. It manages 8 distinct system calls, each with a
+ * specific behavior regarding process control flow and CPU time accounting.
  * 
- */
-
-
+ * This file also handle different types of exceptions based on the register cause ExeCode.
+ * It direct the control to the appropriate handler function for each exception type.
+ * 
+ * It also takle care when user mode try to invoke system calls.
+ *
+ * @def
+ * - System Call Handling: The file distinguishes between system calls that return control
+ * to the original process and SYS2 (terminateProcess) which terminates the process.
+ * 
+ * - Process Management: While most system calls update the process's CPU time and then
+ * resume the current process, the SYS2 system call terminates the process and invokes a
+ * context switch to schedule another process.
+ * 
+ * @note
+ * @attention
+ * IMPORTANT:
+ * Among the 8 syscalls, every syscall except SYS2 (terminateProcess) is designed to
+ *  return control to the current process. In SYS2 the process is terminated, 
+ * so control isn’t returned to the original process but instead to a newly scheduled one. 
+ * All the other syscalls (SYS1, SYS3, SYS4, SYS5, SYS6, SYS7, SYS8) update the process's CPU 
+ * time and then call the function (switchContext) that resumes the executing process.
+ * 
+ * For SYSCALLs calls that do not block or terminate, control is returned to the
+ * Current Process at the conclusion of the Nucleus’s SYSCALL exception handler.
+ *
+ *
+ * @remark
+ * This file is essential in defining the operational semantics of system calls in the
+ * operating system. It outlines the behavior of each call, especially focusing on the
+ * control flow between processes, and demonstrates how the system distinguishes between
+ * calls that continue execution and the one that ends the process.
+ * 
+ * The file encapsulates the low-level mechanism by which the operating system
+ * mediates process execution, time accounting, and context switching, supporting the broader
+ * scheduling and process management subsystems.
+ * 
+ * @author
+ * JaWeee Do
+**********************************************************************************************/
 
 
 #include "../h/types.h"
@@ -61,7 +101,7 @@ cpu_t curr_TOD; /* Record the time of the current process */
  * @return void
 *********************************************************************************************/
 
-void createProcess(state_PTR state_process, support_PTR support_process) {
+HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) {
 
     /* S1: It allocates a new PCB */
     pcb_PTR new_pcb = allocPcb();
@@ -166,8 +206,8 @@ HIDDEN void terminateProcess(pcb_PTR terminate_process){
 
         /* If the process is in non-device semaphores, increament the semaphore */
         if ( ! (
-                (this_semaphore >= &deviceSemaphores[0]) && 
-                (this_semaphore <= &deviceSemaphores[CLOCK_INDEX])
+                (this_semaphore >= &semaphoreDevices[0]) && 
+                (this_semaphore <= &semaphoreDevices[CLOCK_INDEX])
             )) { 
                     ( *(this_semaphore) )++;
         }
@@ -271,7 +311,7 @@ HIDDEN void verhogen(int *this_semaphore){
  * It is to block the current process when it initiates a synchronous I/O operation.
  * 
  * @protocol
- * 1. Find the index of the semaphore associated with the device requesting I/O in deviceSemaphores[].
+ * 1. Find the index of the semaphore associated with the device requesting I/O in semaphoreDevices[].
  * 2. check if the process is waiting for a terminal read operation or write operation
  * 3. Decrement the semaphore value by 1 and increment the soft block count
  * 4. If the value of the semaphore is less than 0, the process must be blocked
@@ -311,12 +351,12 @@ HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for
     }
 
     /* Step 3: Decrease semaphore and increase soft block count */
-    (deviceSemaphores[semaphore_index])--;
+    (semaphoreDevices[semaphore_index])--;
     softBlockedCount++;
 
     /* Step 4: If the value of the semaphore is less than 0, the process must be blocked */
-    if (deviceSemaphores[semaphore_index] < 0) { 
-        blockCurrentProcessHelper(&deviceSemaphores[semaphore_index]);
+    if (semaphoreDevices[semaphore_index] < 0) { 
+        blockCurrentProcessHelper(&semaphoreDevices[semaphore_index]);
         scheduler();
     }
 
@@ -410,11 +450,11 @@ HIDDEN void getCPUTime(){
 
 HIDDEN void waitForClock(){
     /* STEP 1: the current process got block for the clock, decrease the semaphore by 1 */
-    (deviceSemaphores[CLOCK_INDEX])--;
+    (semaphoreDevices[CLOCK_INDEX])--;
 
     /* STEP 2: If the value of the semaphore is less than 0, the process must be blocked */
-    if (deviceSemaphores[CLOCK_INDEX] < 0) { 
-        blockCurrentProcessHelper(&deviceSemaphores[CLOCK_INDEX]);
+    if (semaphoreDevices[CLOCK_INDEX] < 0) { 
+        blockCurrentProcessHelper(&semaphoreDevices[CLOCK_INDEX]);
         scheduler();
     }
 
@@ -451,10 +491,247 @@ HIDDEN getSupportData() {
     switchContext(currentProcess); 
 }
 
-
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------- HELPER + HANDLER --------------------------------------- */
 /* ---------------------------------------------------------------------------------------------- */
+
+/*********************************************************************************************
+ * exceptionTrapHandler
+ * 
+ * @brief
+ * This function is used to handle exceptions. It is the entry point for all exceptions.
+ * The cause of this exception is encoded in the .ExcCode field of the Cause register
+ * (Cause.ExcCode) in the saved exception state. [Section 3.3-pops]
+ *      - For exception code 0 (Interrupts), processing should be passed along to your
+ *          Nucleus’s device interrupt handler. [Section 3.6]
+ *      - For exception codes 1-3 (TLB exceptions), processing should be passed
+ *          along to your Nucleus’s TLB exception handler. [Section 3.7.3]
+ *      - For exception codes 4-7, 9-12 (Program Traps), processing should be passed
+ *          along to your Nucleus’s Program Trap exception handler. [Section 3.7.2]
+ *      - For exception code 8 (SYSCALL), processing should be passed along to
+ *          your Nucleus’s SYSCALL exception handler. [Section 3.5]
+ * (Pandos page 24)
+ * 
+ * @protocol
+ * 1. Get the execution code from the cause register
+ * 2. Check the execution code and call the appropriate handler
+ * 
+ * @param void
+ * @return void
+/***********************************************************************************************/
+
+void exceptionTrapHandler() {
+    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
+    int execCode = (savedState->s_cause >> 2) & 0x1F;
+
+    switch (execCode) {
+        case 0:     // Interrupts
+            deviceInterruptHandler();
+            break;
+        case 1:     // TLB exception 
+        case 2:     // TLB exception
+        case 3:     // TLB exception 
+            tlbTrapHandler();
+            break;
+        case 8:     // SYSCALL
+            systemTrapHandler();
+            break;
+        case 4:     // Program trap
+        case 5:     // Program trap 
+        case 6:     // Program trap 
+        case 7:     // Program trap 
+        case 9:     // Program trap 
+        case 10:    // Program trap 
+        case 11:    // Program trap 
+        case 12:    // Program trap 
+            programTrapHandler();
+            break;
+        default: // Other exceptions
+            passUpOrDie(GENERALEXCEPT);
+            break;
+    }
+}
+
+/*********************************************************************************************
+ * systemTrapHandler
+ * 
+ * @brief
+ * This is the handler of the SYSCALL exception
+ * This function has to take care of the 8 system calls
+ * 
+ * @note About user mode
+ * IMPORTANT:
+ * We need if the Current Process was executing in kernel-mode or user-mode by
+ * examines the Status register in the saved exception state.
+ * 
+ * If a user-mode process attempts to invoke a privileged service:
+ * We want the OS to treat this as an illegal operation, which is a “Reserved Instruction” (RI) Program Trap.
+ * ensure that all illegal or privileged operations in user mode follow the same path in your OS
+ * 
+ * We will set the exception code to “Reserved Instruction” (RI) and then call the programTrapHandler.
+ * Therefore, the execode 5 bit need to be set to 01010, which equals to 10 in decimal.
+ * We mask the cause register by clear all the bit from 2 to 6 and mask it
+ * 
+ * @note
+ * To avoid infinity loop of SYSCALL, the PC must be incremented by 4 prior to returning control
+ * Observe that the correct processor state to load (LDST) is the saved exception state and not the obsolete 
+ * processor state stored in the Current Process’s pcb.
+ * 
+ * 
+ * @def
+ * Reserved Instruction (RI): This exception is raised whenever an instruction is ill-formed, not recognizable, 
+ * or is privileged and is executed in user-mode (Status.KUc=1).
+ * 
+ * KUc: bit 1 - The "current" kernel-mode user-mode control bit. When Status.KUc=0 the processor is in kernel-mode.
+ * The status register last 5 bits: KUo IEo KUp IEp KUc IEc
+ * 
+ * @protocol
+ * 1. Redirect if it is user mode
+ *      - If the process was executing in user-mode, we need to set the exception code to “Reserved Instruction” (RI)
+ *      - Invoke the programTrapHandler
+ * 2. Check if the syscall number is in range
+ *      - If the syscall number is not in range, we need to pass up or die thru sysCallOutRangeHandler
+ * 3. Add the state to the current process
+ * 3. Call the appropriate syscall function
+ * 
+ * @param void
+ * @return void
+ * *********************************************************************************************/
+
+HIDDEN void systemTrapHandler() {
+
+    /* Get the BIOSDATAPAGE */
+    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
+    savedState->s_pc += WORDLEN;
+    
+    /* STEP 1: redirect if it is usermode and set the exception code to RI */
+    if (( (savedState->s_status) & USERPON) != ALLOFF) {
+        savedState->s_cause &= ~(CAUSE_INT_MASK << EXC_CODE_SHIFT);
+        savedState->s_cause |= (EXC_RESERVED_INSTRUCTION << EXC_CODE_SHIFT);
+        userModeTrapHandler();
+    }
+
+    /* STEP 2: check if the syscall number is in range */
+    if (sysCallNum < SYS1_NUM || sysCallNum > SYS8_NUM) {
+        sysCallOutRangeHandler();
+    }
+
+    /* STEP 3: add the state to the current process */
+    sysCallNum = savedState->s_a0;
+    addPigeonCurrentProcessHelper();
+ 
+    /* STEP 4: Call the appropriate syscall function */
+    switch (sysCallNum) {
+        case SYS1_NUM:
+            createProcess(
+                (state_PTR)(currentProcess->p_s.s_a1),
+                (support_PTR)(currentProcess->p_s.s_a2));
+        
+        case SYS2_NUM:
+            terminateProcess(currentProcess);
+            currentProcess = NULL;
+            scheduler();
+
+        case SYS3_NUM:
+            passeren((int *)(currentProcess->p_s.s_a1));
+
+        case SYS4_NUM:
+            verhogen((int *)(currentProcess->p_s.s_a1));
+
+        case SYS5_NUM:
+            waitForIO(currentProcess->p_s.s_a1,
+                      currentProcess->p_s.s_a2,
+                      currentProcess->p_s.s_a3);
+            
+        case SYS6_NUM:
+            getCPUTime();
+            
+        case SYS7_NUM:
+            waitForClock();
+            
+        case SYS8_NUM:
+            getSupportData();
+            
+        default:
+            programTrapHandler();
+    }
+}
+
+/*********************************************************************************************
+ * tlbTrapHandler
+ * 
+ * @brief
+ * A TLB exception occurs when µMPS3 fails in an attempt to translate a logical
+ * address into its corresponding physical address. A TLB exception is defined as an
+ * exception with Cause.ExcCodes of 1-3. [Section 3.4] (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the PGFAULTEXCEPT index value
+ * 
+ * @param void
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void tlbTrapHandler(){
+    passUpOrDie(PGFAULTEXCEPT); 
+}
+
+/*********************************************************************************************
+ * programTrapHandler
+ * 
+ * @brief
+ * A Program Trap exception occurs when the Current Process attempts to perform
+ * some illegal or undefined action. A Program Trap exception is defined as an
+ * exception with Cause.ExcCodes of 4-7, 9-12. [Section 3.4] (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
+ * 
+ * @param void
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void programTrapHandler(){
+    passUpOrDie(GENERALEXCEPT);
+}
+
+/*********************************************************************************************
+ * sysCallOutRangeHandler
+ * 
+ * @brief
+ * A SYSCALL exception numbered 9 and above occurs when the Current Process
+ * executes the SYSCALL instruction (Cause.ExcCode is set to 8 [Section 3.4])
+ * and the contents of a0 is greater than or equal to 9.
+ * The Nucleus SYSCALL exception handler should perform a standard Pass 
+ * Up or Die operation using the GENERALEXCEPT index value. (Pandos page 37)
+ * 
+ * @protocol
+ * 1. Call the passUpOrDie function with the GENERALEXCEPT index value
+ * 
+ * @param void
+ * @return void
+/*********************************************************************************************/
+HIDDEN void sysCallOutRangeHandler(){
+    passUpOrDie(GENERALEXCEPT); 
+}
+
+/*********************************************************************************************
+ * userModeTrapHandler
+ * 
+ * @brief
+ * In particular the Nucleus should simulate a Program Trap exception when a
+ * privileged service is requested in user-mode. (Pandos page 30)
+ * 
+ * @protocol
+ * 1. Call the programTrapHandler
+ * 
+ * @param void
+ * @return void
+/*********************************************************************************************/
+
+HIDDEN void userModeTrapHandler() {
+    programTrapHandler();
+}
 
 /*********************************************************************************************
  * PassUporDie
@@ -496,7 +773,7 @@ HIDDEN void passUpOrDie(int exceptionCode){
     if (currentProcess->p_supportStruct != NULL){
 
         /* Step 1.1: If the current process has a support structure, pass up the exception */
-        moveState(savedExceptState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
+        moveState(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
         
         STCK(curr_TOD);
         updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
@@ -508,19 +785,11 @@ HIDDEN void passUpOrDie(int exceptionCode){
             currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_pc);
     }
     else{
-        /* Call the SYS2 */
+        /* Call the SYS2, call the systemTrapHandler as a SYSCALL */
         sysCallNum = SYS2_NUM;
         systemTrapHandler();
     }
 }
-
-
-
-
-
-
-
-
 
 /*********************************************************************************************
  * blockCurrentProcessHelper
@@ -576,146 +845,5 @@ HIDDEN void blockCurrentProcessHelper(int *this_semaphore){
 /*********************************************************************************************/
 
 HIDDEN void addPigeonCurrentProcessHelper(){
-    moveState(savedExceptState, &(currentProcess->p_s) ); 
+    moveState(savedExceptionState, &(currentProcess->p_s) ); 
 }
-
-
-
-
-
-
-
-
-
-
-/*********************************************************************************************
- * programTrapHandler + tlbTrapHandler
- * 
- * @brief
- * 
- * 
- * 
- * @protocol
- * 
- * 
- * 
- * 
- * @param void
- * @return void
-*********************************************************************************************/
-void sysCallExceptHandler(){
-    passUpOrDie(GENERALEXCEPT); 
-}
-
-void tlbTrapHandler(){
-    passUpOrDie(PGFAULTEXCEPT); 
-}
-
-void programTrapHandler(){
-    passUpOrDie(GENERALEXCEPT);
-}
-
-
-
-
-
-
-
-
-
-
-
-/*********************************************************************************************
- * checkUserMode
- * 
- * @brief
- * This function is used to check if the current process is in user mode.
- * If the current process is in user mode, then it will set the Cause.ExcCode to RI (Reserved Instruction)
- * and handle it as a program trap.
- * 
- * @protocol
- * 1. Check if the current process is in user mode
- * 2. If the current process is in user mode, then set the Cause.ExcCode to RI (Reserved Instruction)
- * 3. Handle it as a program trap
- * 
- * @param savedState: the saved state of the current process
- * @return void
-*********************************************************************************************/
-
-HIDDEN void checkUserMode(state_PTR current_state) {
-    if ((current_state->s_status & USERPON) != ALLOFF) {
-        
-        current_state->s_cause = (current_state->s_cause & ~EXCMASK) | (RESINSTRCODE << CAUSESHFT);
-        
-        pgmTrapH();
-    }
-}
-
-
-
-
-/* Function that represents the entry point into this module when handling SYSCALL events. This function's tasks include, but are not
-limited to, incrementing the value of the PC in the stored exception state (to avoid an infinite loop of SYSCALLs), checking to see if an
-attempt was made to request a SYSCALL while the system was in user mode (if so, the function handles this case as it would a Program Trap
-exception), and checking to see what SYSCALL number was requested so it can invoke an internal helper function to handle that specific
-SYSCALL. If an invalid SYSCALL number was provided (i.e., the SYSCALL number requested was nine or above), we invoke the internal
-function that performs a standard Pass Up or Die operation using the GENERALEXCEPT index value.  */
-void systemTrapHandler(){
-    /* initializing variables that are global to this module, as well as savedExceptState */ 
-    savedExceptState = (state_PTR) BIOSDATAPAGE; /* initializing the saved exception state to the state stored at the start of the BIOS Data Page */
-    sysNum = savedExceptState->s_a0; /* initializing the SYSCALL number variable to the correct number for the exception */
-
-    savedExceptState->s_pc = savedExceptState->s_pc + WORDLEN;
-
-    /* Perform checks to make sure we want to proceed with handling the SYSCALL (as opposed to pgmTrapH) */
-    if (((savedExceptState->s_status) & USERPON) != ALLOFF){ /* if the process was executing in user mode when the SYSCALL was requested */
-        savedExceptState->s_cause = (savedExceptState->s_cause) & RESINSTRCODE; /* setting the Cause.ExcCode bits in the stored exception state to RI (10) */
-        pgmTrapH(); /* invoking the internal function that handles program trap events */
-    }
-    
-    if ((sysNum<SYS1NUM) || (sysNum > SYS8NUM)){ /* check if the SYSCALL number was not 1-8 (we'll punt & avoid uniquely handling it) */
-        pgmTrapH(); /* invoking the internal function that handles program trap events */
-    } 
-    
-    updateCurrPcb(currentProc); /* copying the saved processor state into the Current Process' pcb  */
-    
-    /* enumerating the sysNum values (1-8) and passing control to the respective function to handle it */
-    switch (sysNum){ 
-        case SYS1NUM: /* if the sysNum indicates a SYS1 event */
-            /* a1 should contain the processor state associated with the SYSCALL */
-            /* a2 should contain the (optional) support struct, which may be NULL */
-            createProcess((state_PTR) (currentProc->p_s.s_a1), (support_t *) (currentProc->p_s.s_a2)); /* invoking the internal function that handles SYS1 events */
-
-        case SYS2NUM: /* if the sysNum indicates a SYS2 event */
-            terminateProcess(currentProc); /* invoking the internal function that handles SYS2 events */
-            currentProc = NULL; /* setting the Current Process pointer to NULL */
-            switchProcess(); /* calling the Scheduler to begin executing the next process */
-        
-        case SYS3NUM: /* if the sysNum indicates a SYS3 event */
-            /* a1 should contain the addr of semaphore to be P'ed */
-            waitOp((int *) (currentProc->p_s.s_a1)); /* invoking the internal function that handles SYS3 events */
-        
-        case SYS4NUM: /* if the sysNum indicates a SYS4 event */
-            /* a1 should contain the addr of semaphore to be V'ed */
-            signalOp((int *) (currentProc->p_s.s_a1)); /* invoking the internal function that handles SYS4 events */
-
-        case SYS5NUM: /* if the sysNum indicates a SYS5 event */
-            /* a1 should contain the interrupt line number of the interrupt at the time of the SYSCALL */ 
-            /* a2 should contain the device number associated with the specified interrupt line */
-            /* a3 should contain TRUE or FALSE, indicating if waiting for a terminal read operation */
-            waitForIO(currentProc->p_s.s_a1, currentProc->p_s.s_a2, currentProc->p_s.s_a3); /* invoking the internal function that handles SYS5 events */
-
-        case SYS6NUM: /* if the sysNum indicates a SYS6 event */
-            getCPUTime(); /* invoking the internal function that handles SYS6 events */
-        
-        case SYS7NUM: /* if the sysNum indicates a SYS7 event */
-            waitForPClock(); /* invoking the internal function that handles SYS 7 events */
-        
-        case SYS8NUM: /* if the sysNum indicates a SYS8 event */
-            getSupportData(); /* invoking the internal function that handles SYS 8 events */
-        
-    }
-}
-
-
-
