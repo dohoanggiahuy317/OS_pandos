@@ -231,8 +231,8 @@ void nonTimerInterruptHandler() {
      */
 
     if (pcb_to_unblock != NULL) {
-        currentProcess->p_s.s_v0 = status_code;
-        insertProcQ(&readyQueue, currentProcess);
+        pcb_to_unblock->p_s.s_v0 = status_code;
+        insertProcQ(&readyQueue, pcb_to_unblock);
         softBlockedCount--;
         STCK(curr_TOD);
         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);

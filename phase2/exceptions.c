@@ -778,6 +778,7 @@ void systemTrapHandler() {
     /* Get the BIOSDATAPAGE */
     state_PTR savedState = (state_PTR) BIOSDATAPAGE;
     savedState->s_pc += WORDLEN;
+    sysCallNum = savedState->s_a0;
     
     /* STEP 1: redirect if it is usermode and set the exception code to RI */
     if (( (savedState->s_status) & USERPON) != ALLOFF) {
@@ -792,7 +793,6 @@ void systemTrapHandler() {
     }
 
     /* STEP 3: add the state to the current process */
-    sysCallNum = savedState->s_a0;
     addPigeonCurrentProcessHelper();
  
     /* STEP 4: Call the appropriate syscall function */
@@ -801,15 +801,15 @@ void systemTrapHandler() {
             createProcess(
                 (state_PTR)(currentProcess->p_s.s_a1),
                 (support_PTR)(currentProcess->p_s.s_a2));
-        
+            break;
         case SYS2_NUM:
             terminateProcess(currentProcess);
             currentProcess = NULL;
             scheduler();
-
+            break;
         case SYS3_NUM:
             passeren((int *)(currentProcess->p_s.s_a1));
-
+            break;
         case SYS4_NUM:
             verhogen((int *)(currentProcess->p_s.s_a1));
 
@@ -817,16 +817,16 @@ void systemTrapHandler() {
             waitForIO(currentProcess->p_s.s_a1,
                       currentProcess->p_s.s_a2,
                       currentProcess->p_s.s_a3);
-            
+                      break;
         case SYS6_NUM:
             getCPUTime();
-            
+            break;
         case SYS7_NUM:
             waitForClock();
-            
+            break;
         case SYS8_NUM:
             getSupportData();
-            
+            break;
         default:
             programTrapHandler();
     }
