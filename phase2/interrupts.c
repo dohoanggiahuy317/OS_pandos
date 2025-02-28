@@ -52,8 +52,14 @@ HIDDEN int findInterruptDevice(int interrupt_line_number);
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ Variables ----------------------------------------- */
 /* ---------------------------------------------------------------------------------------------- */
-cpu_t current_process_time_left; /* Calculate the remaining time in the time slice of the current process */
-cpu_t interrupt_TOD; /* Record the time of the interrupt */
+
+/* Calculate the remaining time in the time slice of the current process */
+cpu_t current_process_time_left; 
+
+/* Record the time of the interrupt */
+/* cpu_t interrupt_TOD; */
+
+
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ INTERRUPT ----------------------------------------- */
 /* ---------------------------------------------------------------------------------------------- */
@@ -152,10 +158,9 @@ void PLTInterruptHandler() {
     if (currentProcess != NULL) {
 
         /* Step 1: Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds. */
-/*         setTIMER(PLT_TIME_SLICE);
- */
+        setTIMER(PLT_TIME_SLICE);
+        /* setTIMER(INF_TIME); */
 
-        setTIMER(INF_TIME);
         /* Step 2: Copy the processor state from the BIOS Data Page */
         addPigeonCurrentProcessHelper();
 
@@ -225,25 +230,23 @@ void nonTimerInterruptHandler() {
      *      - Multiply number of devices per interrupt line.
      *      - Add the device number  
      */
-   /* int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;*/
-
-cpu_t curr_TOD;
-int interrupt_line_number;
-/* determining exactly which line number the interrupt occurred on so we can initialize lineNum */
-	if (((savedExceptionState->s_cause) & 0x00000800) != ALLOFF){ /* if there is an interrupt on line 3 */
-		interrupt_line_number = LINE3; /* initializing lineNum to 3, since the highest-priority interrupt occurred on line 3 */
+/*     int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;
+ */
+    int interrupt_line_number;
+	if (((savedExceptionState->s_cause) & 0x00000800) != ALLOFF){ 
+		interrupt_line_number = LINE3;
 	}
-	else if (((savedExceptionState->s_cause) & 0x00001000) != ALLOFF){ /* if there is an interrupt on line 4 */
-		interrupt_line_number = LINE4; /* initializing lineNum to 4, since the highest-priority interrupt occurred on line 4 */
+	else if (((savedExceptionState->s_cause) & 0x00001000) != ALLOFF){
+		interrupt_line_number = LINE4; 
 	}
-	else if (((savedExceptionState->s_cause) & 0x00002000) != ALLOFF){ /* if there is an interrupt on line 5 */
-		interrupt_line_number = LINE5; /* initializing lineNum to 5, since the highest-priority interrupt occurred on line 5 */
+	else if (((savedExceptionState->s_cause) & 0x00002000) != ALLOFF){ 
+		interrupt_line_number = LINE5;
 	}
-	else if (((savedExceptionState->s_cause) & 0x00004000) != ALLOFF){ /* if there is an interrupt on line 6 */
-		interrupt_line_number = LINE6; /* initializing lineNum to 6, since the highest-priority interrupt occurred on line 6 */
+	else if (((savedExceptionState->s_cause) & 0x00004000) != ALLOFF){ 
+		interrupt_line_number = LINE6;
 	}
-	else{ /* otherwise, there is an interrupt on line 7 */
-		interrupt_line_number = LINE7; /* initializing lineNum to 7, since the highest-priority interrupt occurred on line 7 */
+	else{ 
+		interrupt_line_number = LINE7; 
 	}
 
     int device_num = findInterruptDevice(interrupt_line_number);
@@ -313,15 +316,14 @@ int interrupt_line_number;
      * @protocol
      * 1. Save the status code to register v0
      * 2. Insert the PCB to the ready queue
-     */
-
-    /*if (pcb_to_unblock != NULL) {
+    */
+    if (pcb_to_unblock != NULL) {
         pcb_to_unblock->p_s.s_v0 = status_code;
         insertProcQ(&readyQueue, pcb_to_unblock);
         softBlockedCount--;
         STCK(curr_TOD);
         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
-    }*/
+    }
 
     /** STEP 7: Switch Control to the current process
      * 
@@ -334,38 +336,39 @@ int interrupt_line_number;
      * 2. Set the timer to the current process time left
      * 3. Set the current process time to the current process time + (current time - interrupt time)
      * 4. Switch control to the current process
-     */
-    /*if (currentProcess != NULL) {
+    */
+    if (currentProcess != NULL) {
         addPigeonCurrentProcessHelper();
         setTIMER(current_process_time_left);
+        STCK(curr_TOD);
         updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
         switchContext(currentProcess);
     }
 
-    scheduler();*/
+    scheduler();
 
-	if (pcb_to_unblock == NULL){ /* if the supposedly unblocked pcb is NULL, we want to return control to the Current Process */
-		if (currentProcess != NULL){ /* if there is a Current Process to return control to */
-			addPigeonCurrentProcessHelper(); /* update the Current Process' processor state before resuming process' execution */
-			currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD); /* updating the accumulated processor time used by the Current Process */
-			setTIMER(current_process_time_left); /* setting the PLT to the remaining time left on the Current Process' quantum when the interrupt handler was first entered*/
-			switchContext(currentProcess); /* calling the function that returns control to the Current Process */
+/* 	if (pcb_to_unblock == NULL){
+		if (currentProcess != NULL){
+			addPigeonCurrentProcessHelper();
+			currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD);
+			setTIMER(current_process_time_left); 
+			switchContext(currentProcess); 
 		}
-		scheduler(); /*calling the Scheduler to begin execution of the next process on the Ready Queue (if there is no Current Process to return control to) */
+		scheduler();
 	}
 
-	pcb_to_unblock->p_s.s_v0 = status_code; /* placing the stored off status code in the newly unblocked pcb's v0 register */
-	insertProcQ(&readyQueue, pcb_to_unblock); /* inserting the newly unblocked pcb on the Ready Queue to transition it from a "blocked" state to a "ready" state */
-	softBlockedCount--; /* decrementing the value of softBlockCnt, since we have unblocked a previosuly-started process that was waiting for I/O */
-	if (currentProcess != NULL){ /* if there is a Current Process to return control to */
-		addPigeonCurrentProcessHelper(); /* update the Current Process' processor state before resuming process' execution */
-		setTIMER(current_process_time_left); /* setting the PLT to the remaining time left on the Current Process' quantum when the interrupt handler was first entered*/
-		currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD); /* updating the accumulated processor time used by the Current Process */
-		STCK(curr_TOD); /* storing the current value on the Time of Day clock into curr_tod */
-		pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD); /* charging the process associated with the I/O interrupt with the CPU time needed to handle the interrupt */
-		switchContext(currentProcess); /* calling the function that returns control to the Current Process */
+	pcb_to_unblock->p_s.s_v0 = status_code;
+	insertProcQ(&readyQueue, pcb_to_unblock);
+	softBlockedCount--;
+	if (currentProcess != NULL){
+		addPigeonCurrentProcessHelper(); 
+		setTIMER(current_process_time_left);
+		currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD);
+		STCK(curr_TOD);
+		pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
+		switchContext(currentProcess); 
 	}
-	scheduler(); 
+	scheduler();  */
 
 
 
@@ -416,8 +419,7 @@ void intervalTimerInterruptHandler() {
     if (currentProcess != NULL) {
         setTIMER(current_process_time_left);
         addPigeonCurrentProcessHelper();
-/*         updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
- */        currentProcess->p_time += (interrupt_TOD - start_TOD);
+        updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
         switchContext(currentProcess);
     }
     
@@ -457,37 +459,33 @@ void interruptTrapHandler() {
     savedExceptionState = (state_PTR) BIOSDATAPAGE;
 
     /* extract the pending interrupt bits (bits 8-15 of the Cause register) */
-   /*  unsigned int pending;
-    pending = (savedExceptionState->s_cause >> 8) & 0xFF;
-    pending &= 0xFE;*/
+    int pending = savedExceptionState->s_cause;
+/*     pending = (savedExceptionState->s_cause >> 8) & 0xFF;
+    pending &= 0xFE; */
 
     /* Check for PLT interrupt (interrupt line 1, highest priority) */
-    /* if (pending & PLT_INTERRUPT_STATUS) {
+    if (pending & 0x00000200) {
         PLTInterruptHandler();
-        return;
-    } */
+    }
     /* Check for pseudo-clock (Interval Timer) interrupt (interrupt line 2) */
-    /* else if (pending & INTERVAL_TIMER_INTERRUPT_STATUS) {
+    if (pending & 0x00000400) {
         intervalTimerInterruptHandler();
-        return;
-    } */
+    }
+    nonTimerInterruptHandler();
     /* Check for device interrupts on lines 3-7 */
-    /* else if (pending & DEVICE_INTERRUPT_STATUS) {
+    /* if (pending & DEVICE_INTERRUPT_STATUS) {
         nonTimerInterruptHandler();
-        return;
     } */
     /* if no known interrupt pending, simply call scheduler */
-    /* else {
-        scheduler();
-    } */
-
-    if (((savedExceptionState->s_cause) & 0x00000200) != ALLOFF){ /* if there is a PLT interrupt (i.e., an interrupt occurred on line 1) */
- 		PLTInterruptHandler(); /* calling the internal function that handles PLT interrupts */
+/*     scheduler();
+ */
+   /*  if (((savedExceptionState->s_cause) & 0x00000200) != ALLOFF){ 
+ 		PLTInterruptHandler(); 
  	}
- 	if (((savedExceptionState->s_cause) & 0x00000400) != ALLOFF){ /* if there is a System-Wide Interval Timer/Pseudo-clock interrupt (i.e., an interrupt occurred on line 2) */
- 		intervalTimerInterruptHandler(); /* calling the internal function that handles System-Wide Interval Timer/Pseudo-clock interrupts */
+ 	if (((savedExceptionState->s_cause) & 0x00000400) != ALLOFF){
+ 		intervalTimerInterruptHandler();
  	}
- 	nonTimerInterruptHandler();
+ 	nonTimerInterruptHandler(); */
 
 }
 

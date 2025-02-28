@@ -157,8 +157,8 @@
 
 
 /* Device Constants */
-#define MAX_DEVICE_COUNT  49
-#define CLOCK_INDEX      (MAX_DEVICE_COUNT - 1)
+#define MAX_DEVICE_COUNT        49
+#define CLOCK_INDEX             (MAX_DEVICE_COUNT - 1)
 
 
 

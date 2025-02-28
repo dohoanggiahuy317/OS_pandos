@@ -150,65 +150,65 @@ void switchContext(pcb_PTR target_process) {
  * @return void
  * **********************************************************************************************/
 
-void scheduler() {
-   /*  pcb_PTR next_process; */  /* pointer to next process to run */
+void scheduler1() {
+    pcb_PTR next_process;  /* pointer to next process to run */
 
-    /* If the Ready Queue is not empty, dispatch the next process */\
-    /* if (emptyProcQ(readyQueue)) { */
+    /* If the Ready Queue is not empty, dispatch the next process */
+    if (emptyProcQ(readyQueue)) {
         /* Ready Queue is empty */
-/*         if (processCount == 0) {
- */            /* No processes in the system; halt. */
-/*             HALT();
+        if (processCount == 0) {
+            /* No processes in the system; halt. */
+            HALT();
         }
         else if (softBlockedCount > 0) {
- */            /* There are processes in the system but some are blocked waiting for an event.
+            /* There are processes in the system but some are blocked waiting for an event.
                Prepare to wait:
                  - Enable interrupts in the status register.
                  - Disable the PLT by loading it with a very large value (INF_TIME).
                  - Execute the WAIT instruction to wait for an event.
             */
-/*             setSTATUS(ALLOFF | IMON | IECON);
+            setSTATUS(ALLOFF | IMON | IECON);
             setTIMER(INF_TIME);
             WAIT();
         }
         else {
- */            /* Deadlock detected */
-/*             PANIC();
+            /* Deadlock detected */
+            PANIC();
         }
         
     } else {
- */        /* Step 1: remove the process from the head of the Ready Queue */
-/*         next_process = removeProcQ(&readyQueue);
+        /* Step 1: remove the process from the head of the Ready Queue */
+        next_process = removeProcQ(&readyQueue);
         currentProcess = next_process;
         
- */        /* Step 2: load 5 milliseconds on the PLT */
-/*         LDIT(PLT_TIME_SLICE);
- */        
+        /* Step 2: load 5 milliseconds on the PLT */
+        setTIMER(5000);
+        LDIT(5000);
+        
         /* Step 3: load the state of the current process */
-/*         LDST(&(currentProcess->p_s));
+        LDST(&(currentProcess->p_s));
     }
- */
+}
 
-
-    currentProcess = removeProcQ(&readyQueue); /* removing the pcb from the head of the ReadyQueue and storing its pointer in currentProc */
-	if (currentProcess != NULL){ /* if the Ready Queue is not empty */
-		setTIMER(5000); /* loading five milliseconds on the processor's Local Timer (PLT) */
-		switchContext(currentProcess); /* invoking the internal function that will perform the LDST on the Current Process' processor state */
+void scheduler() {
+    currentProcess = removeProcQ(&readyQueue); 
+	if (currentProcess != NULL){
+		setTIMER(5000);
+		switchContext(currentProcess);
 	}
 
-	/* We know the ReadyQueue is empty. */
-	if (processCount == 0){ /* if the number of started, but not yet terminated, processes is zero */
-		HALT(); /* invoking the HALT() function to halt the system and print a regular shutdown message on terminal 0 */
+
+	if (processCount == 0){ 
+		HALT(); 
 	}
 	
-	if ((processCount > 0) && (softBlockedCount > 0)){ /* if the number of started, but not yet terminated, processes is greater than zero and there's at least one such process is "blocked" */
-		setSTATUS(ALLOFF | IMON | IECON); /* enabling interrupts for the Status register so we can execute the WAIT instruction */
-		setTIMER(INF_TIME); /* loading the PLT with a very large value so that the first interrupt that occurs after entering a WAIT state is not for the PLT */
-		WAIT(); /* invoking the WAIT() function to idle the processor, as it needs to wait for a device interrupt to occur */
+	if ((processCount > 0) && (softBlockedCount > 0)){ 
+		setSTATUS(ALLOFF | IMON | IECON); 
+		setTIMER(INF_TIME); 
+		WAIT(); 
 	}
 
-	/* A deadlock situation is occurring (i.e., procCnt > 0 && softBlockCnt == 0) */
-	PANIC(); /* invoking the PANIC() function to stop the system and print a warning message on terminal 0 */
+	PANIC(); 
 
 
 

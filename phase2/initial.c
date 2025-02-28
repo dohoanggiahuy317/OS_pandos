@@ -69,6 +69,12 @@ int semaphoreDevices[MAX_DEVICE_COUNT];
 /* The start time of the current process */
 cpu_t start_TOD;
 
+/* The current time of the system */
+cpu_t curr_TOD;
+
+/* The interrupt time of the system */
+cpu_t interrupt_TOD;
+
 /* the exception processor state to handle */
 state_PTR savedExceptionState;
 
@@ -124,41 +130,32 @@ void debugExceptionHandler(int key, int param1, int param2, int param3) {
  * @param void
  * @return void
 ***********************************************************************************************/
-void exceptionTrapHandler() {
+void exceptionTrapHandler1() {
     state_PTR savedState = (state_PTR) BIOSDATAPAGE;
     int execCode = ((savedState->s_cause) & 0x0000007C) >> 2;
     
-    /* Debug call - identifies entry to exception handler */
-    debugExceptionHandler(100, execCode, savedState->s_cause, savedState->s_pc);
 
     if (execCode == 0) { /* if the exception code is 0 */
-        /* Debug call - before interrupt handler */
-        debugExceptionHandler(110, execCode, 0, 0);
         interruptTrapHandler(); /* calling the Nucleus' device interrupt handler function */
     }
     else if (execCode <= 3) { /* if the exception code is between 1 and 3 (inclusive) */
-        /* Debug call - before TLB handler */
-        debugExceptionHandler(120, execCode, savedState->s_entryHI, savedState->s_status);
+
         tlbTrapHandler(); /* calling the Nucleus' TLB exception handler function */
     }
     else if (execCode == 8) { /* if the exception code is 8 */
-        /* Debug call - before SYSCALL handler */
-        debugExceptionHandler(130, execCode, savedState->s_a0, savedState->s_a1);
         systemTrapHandler(); /* calling the Nucleus' SYSCALL exception handler function */
     }
     else {
-        /* Debug call - before program trap handler */
-        debugExceptionHandler(140, execCode, savedState->s_cause, savedState->s_pc);
         programTrapHandler();
     }
 }
 
 
-/* void exceptionTrapHandler() {
+void exceptionTrapHandler() {
     state_PTR savedState = (state_PTR) BIOSDATAPAGE;
-    int execCode = ((savedState->s_cause) & 0x0000007C) >> 2; */
+    int execCode = ((savedState->s_cause) & 0x0000007C) >> 2;
 
-   /*  switch (execCode) {
+    switch (execCode) {
         case 0:
             interruptTrapHandler();
             break;
@@ -183,20 +180,20 @@ void exceptionTrapHandler() {
         default: 
             programTrapHandler();
             break;
-    } */
+    }
 
-   	/* if (execCode == 0){ */ /* if the exception code is 0 */
-		/* interruptTrapHandler();  *//* calling the Nucleus' device interrupt handler function */
-	/* }
-	if (execCode <= 3){  *//* if the exception code is between 1 and 3 (inclusive) */
-		/* tlbTrapHandler();  *//* calling the Nucleus' TLB exception handler function */
-	/* }
-	if (execCode == 8){  *//* if the exception code is 8 */
-		/* systemTrapHandler();  *//* calling the Nucleus' SYSCALL exception handler function */
-	/* }
+   	if (execCode == 0){ /* if the exception code is 0 */
+		interruptTrapHandler(); /* calling the Nucleus' device interrupt handler function */
+	}
+	if (execCode <= 3){ /* if the exception code is between 1 and 3 (inclusive) */
+		tlbTrapHandler(); /* calling the Nucleus' TLB exception handler function */
+	}
+	if (execCode == 8){ /* if the exception code is 8 */
+		systemTrapHandler(); /* calling the Nucleus' SYSCALL exception handler function */
+	}
 	programTrapHandler();
 }
- */
+
 
 /************************************************************************************************
  * initPassUpVector
@@ -258,6 +255,7 @@ void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end) {
     process->p_time += (end - start);
 }
 
+
 /*********************************************************************************************
  * initDeviceSemaphoresHelper
  * 
@@ -287,11 +285,6 @@ void initDeviceSemaphoresHelper() {
         semaphoreDevices[i] = 0;
     }
 }
-
-
-
-
-
 
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -352,27 +345,26 @@ void main() {
     currentProcess = NULL;
 
     /* Step 9: init the device semaphores */
-/*     initDeviceSemaphoresHelper();
- */
-    int i;
+    initDeviceSemaphoresHelper();
+
+    /* int i;
 	for (i = 0; i < MAX_DEVICE_COUNT; i++){
-		/* initializing the device semaphores */
 		semaphoreDevices[i] = 0;
-	}
+	} */
 
     /* step 2 + 3: init PCB and ACL */
     initPcbs();
     initASL();
 
     /* Step 1: init the pass up vector */
-    /* initPassUpVector(); */
+    initPassUpVector();
 
-    passupvector_t *procVec;
-    procVec = (passupvector_t *) PASSUPVECTOR; /* initializing procVec to be a pointer to the address of the Process 0 Pass Up Vector */
-	procVec->tlb_refll_handler = (memaddr) uTLB_RefillHandler; /* initializing the address for handling TLB-Refill events */
-	procVec->tlb_refll_stackPtr = KERNELSTACK; /* initializing the stack pointer for handling Nucleus TLB-Refill events */
-	procVec->exception_handler = (memaddr) exceptionTrapHandler; /* initializing the address for handling general exceptions */
-	procVec->exception_stackPtr = KERNELSTACK; /* initializing the stack pointer for handling general exceptions */
+/*     passupvector_t *procVec;
+    procVec = (passupvector_t *) PASSUPVECTOR;
+	procVec->tlb_refll_handler = (memaddr) uTLB_RefillHandler;
+	procVec->tlb_refll_stackPtr = KERNELSTACK; 
+	procVec->exception_handler = (memaddr) exceptionTrapHandler; 
+	procVec->exception_stackPtr = KERNELSTACK;  */
 
     /* Step 8: load the interval timer with the value of PSECOND (100000)
     this can be use for scheduling */
