@@ -127,7 +127,19 @@ void addPigeonCurrentProcessHelper() {
  * @param this_semaphore: the semaphore to be passed
  * @return void
 *********************************************************************************************/
+
 void blockCurrentProcessHelper(int *this_semaphore){
+    moveStateHelper(&(currentProcess->p_s), (state_PTR) BIOSDATAPAGE);
+	STCK(curr_TOD);
+    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+    insertBlocked(this_semaphore, currentProcess);
+    currentProcess = NULL;
+    scheduler();
+}
+
+
+
+void blockCurrentProcessHelper1(int *this_semaphore){
 	STCK(curr_TOD);
     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
     insertBlocked(this_semaphore, currentProcess);
@@ -249,7 +261,70 @@ void createProcess(state_PTR state_process, support_PTR support_process) {
  * @param terminate_process: the process to be terminated
  * @return void
 *********************************************************************************************/
-void terminateProcess(pcb_PTR terminate_process){ 
+
+/*********************************************************************************************
+ * SYS2 - terminateProcess
+ * 
+ * @brief
+ * Process end, execution stops, and its resources are cleaned up, all of its child processes 
+ * are also terminated. This ensures that no part of the process's "family tree" is left running.
+ * 
+ * @protocol
+ * 1. Recursively terminate all children of the process to be terminated.
+ * 2. Check the position of the process:
+ *      - If blocked on the ASL,
+ *          - OutBlocked the process
+ *          - If it is in device semaphores, decrement softBlockedCount
+ *          - If it is in non-device semaphores, increment the semaphore value
+ *      - If in the Ready Queue, remove it
+ *      - If it is the Current Process, detach it from its parent
+ * 3. Free the PCB and decrement process count
+ * 4. After all processes have been terminated, call the Scheduler if needed
+ * 
+ * @param terminate_process: the process to be terminated
+ * @return void
+*********************************************************************************************/
+void terminateProcess(pcb_PTR terminate_process){
+
+    /* Step 1: Recursively terminate all children */
+    while(!emptyChild(terminate_process)){
+        terminateProcess(removeChild(terminate_process));
+    }
+
+    /* Step 2: Handle based on process position */
+    int *this_semaphore = terminate_process->p_semAdd;
+    
+    if(this_semaphore != NULL){
+        /* Process is blocked on a semaphore */
+        outBlocked(terminate_process);
+        
+        /* Check if device semaphore or non-device semaphore */
+        if((this_semaphore >= &semaphoreDevices[0]) && 
+           (this_semaphore <= &semaphoreDevices[CLOCK_INDEX])){
+            /* Device semaphore - decrement soft block count */
+            softBlockedCount--;
+        } else {
+            /* Non-device semaphore - increment semaphore value */
+            (*this_semaphore)++;
+        }
+    } 
+
+    if(terminate_process != currentProcess){
+        /* Process is in the ready queue */
+        outProcQ(&readyQueue, terminate_process);
+    }
+    /* If process is current, no need to remove from any queue */
+    
+    /* Step 3: Free PCB and decrement process count */
+    outChild(terminate_process);
+    freePcb(terminate_process);
+    processCount--;
+}
+
+
+
+
+void terminateProcess1(pcb_PTR terminate_process){ 
 
     /* Step 1: Recursively terminate all childrn */
     while ( !(emptyChild(terminate_process)) ) {
@@ -318,10 +393,12 @@ void passeren(int *this_semaphore){
     /* Decrement the semaphore value by 1 */
     (*this_semaphore)--;
 
+    debugExceptionHandler(8, *this_semaphore, 0, 0);
+
     if (*this_semaphore < 0) { 
         /* If the value of the semaphore is less than 0, the process must be blocked */
         blockCurrentProcessHelper(this_semaphore);
-        scheduler();
+        /* scheduler(); */
     }
 
     /* update the timer for the current process and return control to current process */
@@ -351,13 +428,19 @@ void passeren(int *this_semaphore){
  * @return void
 **********************************************************************************************/
 void verhogen(int *this_semaphore){
+
     /* Increment the semaphore value by 1 */
     (*this_semaphore)++;
+
+    debugExceptionHandler(9, *this_semaphore, 0, 0);
 
     if (*this_semaphore <= 0) { 
         /* If the value of the semaphore is less than or equal to 0, the process must be unblocked */
         pcb_PTR this_pcb = removeBlocked(this_semaphore);
-        insertProcQ(&readyQueue, this_pcb);
+
+        if (this_pcb != NULL) {
+            insertProcQ(&readyQueue, this_pcb);
+        }
     }
 
     /* update the timer for the current process and return control to current process */
@@ -422,7 +505,7 @@ void waitForIO(int interrupt_line_number, int device_number, int wait_for_read){
     /* Step 4: If the value of the semaphore is less than 0, the process must be blocked */
     if (semaphoreDevices[semaphore_index] < 0) { 
         blockCurrentProcessHelper(&semaphoreDevices[semaphore_index]);
-        scheduler();
+      /*   scheduler(); */
     }
 
     /* Step 5: update the timer for the current process and return control to current process */
@@ -530,7 +613,7 @@ void waitForClock(){
     if (semaphoreDevices[CLOCK_INDEX] < 0) { 
         softBlockedCount++;
         blockCurrentProcessHelper(&semaphoreDevices[CLOCK_INDEX]);
-        scheduler();
+        /* scheduler(); */
     }
 
     /* STEP 3: update the timer for the current process and return control to current process */
@@ -631,7 +714,7 @@ void passUpOrDie(int exception_code){
         sysCallNum = SYS2_NUM;
         terminateProcess(currentProcess);
         currentProcess = NULL;
-        /* scheduler(); */
+        scheduler();
     }
 }
 

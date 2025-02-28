@@ -61,9 +61,6 @@ pcb_PTR readyQueue;
 pcb_PTR currentProcess;
 
 /* The device semaphores are used to manage access to the devices */
-semaphore semaphoreInternal;
-
-/* The device semaphores are used to manage access to the devices */
 int semaphoreDevices[MAX_DEVICE_COUNT];
 
 /* The start time of the current process */
@@ -277,7 +274,6 @@ void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end) {
  * @return void
  ***********************************************************************************************/
 void initDeviceSemaphoresHelper() {
-    semaphoreInternal = 0;
     /* Set the interval timer semaphore to 0 (unblocked) 
     Initialize each device semaphore to 0 (unblocked)*/
     int i;

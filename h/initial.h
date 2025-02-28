@@ -17,5 +17,6 @@ extern cpu_t interrupt_TOD;
 extern state_PTR savedExceptionState;
 
 extern void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end);
+extern void debugExceptionHandler(int key, int param1, int param2, int param3);
 
 #endif

@@ -16,6 +16,7 @@
 
 #include "../h/const.h"
 #include "../h/types.h"
+#include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
 
 typedef unsigned int devregtr;
@@ -155,7 +156,6 @@ void test() {
 	
 	SYSCALL(VERHOGEN, (int)&testsem, 0, 0);					/* V(testsem)   */
 
-	print("AKSJA\n");
 	print("p1 v(testsem)\n");
 
 	/* set up states of the other processes */
@@ -411,10 +411,14 @@ void p4() {
 			break;
 	}
 
+	print("1\n");
 	SYSCALL(VERHOGEN, (int)&synp4, 0, 0);				/* V(synp4)     */
 
+
+	print("2\n");
 	SYSCALL(PASSERN, (int)&blkp4, 0, 0);				/* P(blkp4)     */
 
+	print("3\n");
 	SYSCALL(PASSERN, (int)&synp4, 0, 0);				/* P(synp4)     */
 
 	/* start another incarnation of p4 running, and wait for  */
@@ -429,6 +433,8 @@ void p4() {
 	SYSCALL(PASSERN, (int)&synp4, 0, 0);				/* wait for it       */
 
 	print("p4 is OK\n");
+
+
 
 	SYSCALL(VERHOGEN, (int)&endp4, 0, 0);				/* V(endp4)          */
 

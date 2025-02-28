@@ -118,6 +118,8 @@ void switchContext(pcb_PTR target_process) {
 }
 
 
+
+
 /**********************************************************************************************
  * scheduler
  * 
@@ -149,8 +151,86 @@ void switchContext(pcb_PTR target_process) {
  * 
  * @return void
  * **********************************************************************************************/
+void scheduler() {
+    pcb_PTR next_process;
 
-void scheduler1() {
+    /* If the Ready Queue is not empty, dispatch the next process */
+    if (!emptyProcQ(readyQueue)) {
+        /* Step 1: Remove the pcb from the head of the Ready Queue */
+        next_process = removeProcQ(&readyQueue);
+        
+        /* Store pointer to the PCB in the Current Process field */
+        currentProcess = next_process;
+        
+        /* Step 2: Load 5 milliseconds on the PLT */
+        setTIMER(5000);
+        
+        /* Step 3: Load the processor state of the current process */
+        switchContext(currentProcess);
+    } 
+    else {
+        /* Ready Queue is empty */
+        
+        /* Case 1: If Process Count is zero, halt the system */
+        if (processCount == 0) {
+            HALT();
+        }
+        /* Case 2: If processes exist but some are blocked waiting for events */
+        else if (softBlockedCount > 0) {
+            /* Enable interrupts and disable PLT before waiting */
+            setSTATUS(ALLOFF | IMON | IECON);
+            setTIMER(INF_TIME);
+            WAIT();
+        }
+        /* Case 3: Deadlock detected - processes exist but none are ready or blocked */
+        else {
+            PANIC();
+        }
+    }
+}
+
+
+
+void scheduler3() {
+	if (emptyProcQ(readyQueue)) {
+		if (processCount == 0) {
+			HALT();
+		}
+
+		if (processCount > 0 && softBlockedCount > 0) {
+			unsigned int prevStatus = getSTATUS();
+            setTIMER(INF_TIME);
+            setSTATUS((prevStatus) | IECON | IMON);
+
+			WAIT();
+
+			setSTATUS(prevStatus);
+		}
+
+		if (processCount > 0 && softBlockedCount == 0) {
+			PANIC();
+		}
+	}
+
+	currentProcess = removeProcQ(&readyQueue);
+
+	setTIMER(5000);
+
+	STCK(start_TOD);
+
+	LDST(&(currentProcess->p_s));
+}
+
+
+
+
+
+
+
+
+
+
+void scheduler2() {
     pcb_PTR next_process;  /* pointer to next process to run */
 
     /* If the Ready Queue is not empty, dispatch the next process */
@@ -190,7 +270,7 @@ void scheduler1() {
     }
 }
 
-void scheduler() {
+void scheduler1() {
     currentProcess = removeProcQ(&readyQueue); 
 	if (currentProcess != NULL){
 		setTIMER(5000);
