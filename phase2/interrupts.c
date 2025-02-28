@@ -32,15 +32,21 @@
 *********************************************************************************************/
 
 
+#include "../h/asl.h"
 #include "../h/types.h"
 #include "../h/const.h"
-#include "../h/initial.h"
-#include "../h/exceptions.h"
-#include "../h/interrupts.h"
-#include "../h/scheduler.h"
 #include "../h/pcb.h"
-#include "../h/asl.h"
+#include "../h/scheduler.h"
+#include "../h/interrupts.h"
+#include "../h/exceptions.h"
+#include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
+
+
+HIDDEN void PLTInterruptHandler();
+HIDDEN void intervalTimerInterruptHandler();
+HIDDEN void nonTimerInterruptHandler();
+HIDDEN int findInterruptDevice(int interrupt_line_number);
 
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -48,7 +54,6 @@
 /* ---------------------------------------------------------------------------------------------- */
 cpu_t current_process_time_left; /* Calculate the remaining time in the time slice of the current process */
 cpu_t interrupt_TOD; /* Record the time of the interrupt */
-
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ INTERRUPT ----------------------------------------- */
 /* ---------------------------------------------------------------------------------------------- */
@@ -83,7 +88,6 @@ cpu_t interrupt_TOD; /* Record the time of the interrupt */
  * @param interrupt_line_number: the line number of the interrupt
  * @return int: the device number
 *********************************************************************************************/
-
 int findInterruptDevice(int interrupt_line_number){
 
     /* tells the compiler to interpret the memory starting at RAMBASEADDR as a structure of type devregarea_t */
@@ -96,22 +100,84 @@ int findInterruptDevice(int interrupt_line_number){
     /* check the device bit map to find the device that generated the interrupt */
     if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_0) != ALLOFF) {
         return DEVICE_0;
-    } else if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_1) != ALLOFF) {
+    } 
+     if ( (device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_1) != ALLOFF) {
         return DEVICE_1;
-    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_2) != ALLOFF) {
+    } 
+     if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_2) != ALLOFF) {
         return DEVICE_2;
-    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_3) != ALLOFF) {
+    } 
+     if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_3) != ALLOFF) {
         return DEVICE_3;
-    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_4) != ALLOFF) {
+    } 
+     if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_4) != ALLOFF) {
         return DEVICE_4;
-    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_5) != ALLOFF) {
+    } 
+     if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_5) != ALLOFF) {
         return DEVICE_5;
-    } else if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_6) != ALLOFF) {
+    } 
+     if ((device_bit_map & INTERRUPTS_BIT_CONST_DEVICE_6) != ALLOFF) {
         return DEVICE_6;
     }
 
     return DEVICE_7;
 }
+
+
+/*********************************************************************************************
+ * PLTInterruptHandler
+ * 
+ * @brief
+ * This function is used to handle PLT interrupts. The PLT is used to support CPU scheduling.
+ * The Scheduler will load the PLT with the value of 5 milliseconds (Pandos page 43)
+ * 
+ * @protocol
+ * 1. Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds.
+ *   This tells the hardware that the interrupt has been handled.
+ * 2. Copy the processor state from the BIOS Data Page (saved during the exception)
+ *  into the current process's PCB.
+ * 3. Update the accumulated CPU time for the current process.
+ * Here we get the current time-of-day and add the elapsed time to the process's total.
+ * 4. Transition the current process from the "running" state to the "ready" state
+ * by inserting it into the ready queue.
+ * 5. Call the scheduler to choose the next process to run.
+ * 
+ * @param void
+ * @return void
+ ***********************************************************************************************/
+void PLTInterruptHandler() {
+
+    cpu_t curr_TOD;
+
+    if (currentProcess != NULL) {
+
+        /* Step 1: Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds. */
+/*         setTIMER(PLT_TIME_SLICE);
+ */
+
+        setTIMER(INF_TIME);
+        /* Step 2: Copy the processor state from the BIOS Data Page */
+        addPigeonCurrentProcessHelper();
+
+        /* Step  3: Update the accumulated CPU time for the current process */
+        STCK(curr_TOD);
+        updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+
+        /* STEP 4: Transition the current process from the "running" state to the "ready" state */
+        insertProcQ(&readyQueue, currentProcess);
+        currentProcess = NULL;
+
+        /*  STEP 5: call the scheduler */
+        scheduler();
+    }
+
+    /* Step 0: Get the current process, if there is no current process, panic */    
+    PANIC();
+
+
+}
+
+
 
 /*********************************************************************************************
  * nonTimerInterruptHandler
@@ -128,7 +194,6 @@ int findInterruptDevice(int interrupt_line_number){
  * @param void
  * @return void
  ***********************************************************************************************/
-
 void nonTimerInterruptHandler() {
     /* tells the compiler to interpret the memory starting at RAMBASEADDR as a structure of type devregarea_t */
     devregarea_t *device_register_area;
@@ -162,6 +227,7 @@ void nonTimerInterruptHandler() {
      */
    /* int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;*/
 
+cpu_t curr_TOD;
 int interrupt_line_number;
 /* determining exactly which line number the interrupt occurred on so we can initialize lineNum */
 	if (((savedExceptionState->s_cause) & 0x00000800) != ALLOFF){ /* if there is an interrupt on line 3 */
@@ -305,51 +371,7 @@ int interrupt_line_number;
 
 }   
 
-/*********************************************************************************************
- * PLTInterruptHandler
- * 
- * @brief
- * This function is used to handle PLT interrupts. The PLT is used to support CPU scheduling.
- * The Scheduler will load the PLT with the value of 5 milliseconds (Pandos page 43)
- * 
- * @protocol
- * 1. Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds.
- *   This tells the hardware that the interrupt has been handled.
- * 2. Copy the processor state from the BIOS Data Page (saved during the exception)
- *  into the current process's PCB.
- * 3. Update the accumulated CPU time for the current process.
- * Here we get the current time-of-day and add the elapsed time to the process's total.
- * 4. Transition the current process from the "running" state to the "ready" state
- * by inserting it into the ready queue.
- * 5. Call the scheduler to choose the next process to run.
- * 
- * @param void
- * @return void
- ***********************************************************************************************/
 
-HIDDEN void PLTInterruptHandler() {
-    /* Step 0: Get the current process, if there is no current process, panic */    
-    if (currentProcess == NULL) {
-        PANIC();
-        return;
-    }
-
-    /* Step 1: Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds. */
-    setTIMER(PLT_TIME_SLICE);
-
-    /* Step 2: Copy the processor state from the BIOS Data Page */
-    addPigeonCurrentProcessHelper();
-
-    /* Step  3: Update the accumulated CPU time for the current process */
-    STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-
-    /* STEP 4: Transition the current process from the "running" state to the "ready" state */
-    insertProcQ(&readyQueue, currentProcess);
-
-    /*  STEP 5: call the scheduler */
-    scheduler();
-}
 
 /*********************************************************************************************
  * intervalTimerInterruptHandler
@@ -374,12 +396,11 @@ HIDDEN void PLTInterruptHandler() {
  * @param void
  * @return void
  ***********************************************************************************************/
-
-HIDDEN void intervalTimerInterruptHandler() {
+void intervalTimerInterruptHandler() {
     pcb_PTR pcb_to_unblock;
 
     /* Step 1: Acknowledge the interrupt by loading the Interval Timer with 100 milliseconds. */
-    setTIMER(INTERVAL_TIMER);
+    LDIT(INTERVAL_TIMER);
 
     /* Step 2: Unblock ALL pcbs blocked on the Pseudo-clock semaphore */
     while (headBlocked(&semaphoreDevices[CLOCK_INDEX]) != NULL) {
@@ -395,7 +416,8 @@ HIDDEN void intervalTimerInterruptHandler() {
     if (currentProcess != NULL) {
         setTIMER(current_process_time_left);
         addPigeonCurrentProcessHelper();
-        updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
+/*         updateProcessTimeHelper(currentProcess, start_TOD, interrupt_TOD);
+ */        currentProcess->p_time += (interrupt_TOD - start_TOD);
         switchContext(currentProcess);
     }
     
@@ -426,7 +448,6 @@ HIDDEN void intervalTimerInterruptHandler() {
  * @param void
  * @return void
  ***********************************************************************************************/
-
 void interruptTrapHandler() {
     /* record current time and timer value */
     STCK(interrupt_TOD);
@@ -436,28 +457,37 @@ void interruptTrapHandler() {
     savedExceptionState = (state_PTR) BIOSDATAPAGE;
 
     /* extract the pending interrupt bits (bits 8-15 of the Cause register) */
-    unsigned int pending;
+   /*  unsigned int pending;
     pending = (savedExceptionState->s_cause >> 8) & 0xFF;
-    pending &= 0xFE; /* ignore interrupt line 0 as per uniprocessor design */
+    pending &= 0xFE;*/
 
     /* Check for PLT interrupt (interrupt line 1, highest priority) */
-    if (pending & PLT_INTERRUPT_STATUS) {
+    /* if (pending & PLT_INTERRUPT_STATUS) {
         PLTInterruptHandler();
         return;
-    }
+    } */
     /* Check for pseudo-clock (Interval Timer) interrupt (interrupt line 2) */
-    else if (pending & INTERVAL_TIMER_INTERRUPT_STATUS) {
+    /* else if (pending & INTERVAL_TIMER_INTERRUPT_STATUS) {
         intervalTimerInterruptHandler();
         return;
-    }
+    } */
     /* Check for device interrupts on lines 3-7 */
-    else if (pending & DEVICE_INTERRUPT_STATUS) {
+    /* else if (pending & DEVICE_INTERRUPT_STATUS) {
         nonTimerInterruptHandler();
         return;
-    }
+    } */
     /* if no known interrupt pending, simply call scheduler */
-    else {
+    /* else {
         scheduler();
-    }
+    } */
+
+    if (((savedExceptionState->s_cause) & 0x00000200) != ALLOFF){ /* if there is a PLT interrupt (i.e., an interrupt occurred on line 1) */
+ 		PLTInterruptHandler(); /* calling the internal function that handles PLT interrupts */
+ 	}
+ 	if (((savedExceptionState->s_cause) & 0x00000400) != ALLOFF){ /* if there is a System-Wide Interval Timer/Pseudo-clock interrupt (i.e., an interrupt occurred on line 2) */
+ 		intervalTimerInterruptHandler(); /* calling the internal function that handles System-Wide Interval Timer/Pseudo-clock interrupts */
+ 	}
+ 	nonTimerInterruptHandler();
+
 }
 

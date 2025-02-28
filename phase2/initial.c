@@ -29,28 +29,30 @@
 **********************************************************************************************/
 
 
+#include "../h/asl.h"
 #include "../h/types.h"
 #include "../h/const.h"
-#include "../h/initial.h"
-#include "../h/exceptions.h"
-#include "../h/interrupts.h"
-#include "../h/scheduler.h"
 #include "../h/pcb.h"
-#include "../h/asl.h"
+#include "../h/scheduler.h"
+#include "../h/interrupts.h"
+#include "../h/exceptions.h"
+#include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
 
 
 extern void test();
+extern void uTLB_RefillHandler(); /* function declaration for uTLB_RefillHandler(), which will be defined in exceptions.c */
+HIDDEN void exceptionTrapHandler();
 
 /* ------------------------------------------------------ */
 /* ------------------ Global Variables ------------------ */
 /* ------------------------------------------------------ */
 
 /* Count the currnt number of process in the system */
-unsigned int processCount;
+int processCount;
 
 /* Count the current number of soft blocked process in the system */
-unsigned int softBlockedCount;
+int softBlockedCount;
 
 /* The ready queue is a list of PCBs that are ready to run */
 pcb_PTR readyQueue;
@@ -62,14 +64,231 @@ pcb_PTR currentProcess;
 semaphore semaphoreInternal;
 
 /* The device semaphores are used to manage access to the devices */
-semaphore semaphoreDevices[MAX_DEVICE_COUNT];
+int semaphoreDevices[MAX_DEVICE_COUNT];
 
 /* The start time of the current process */
 cpu_t start_TOD;
-cpu_t curr_TOD; /* Record the time of the current process */
 
 /* the exception processor state to handle */
 state_PTR savedExceptionState;
+
+
+
+
+
+/* ---------------------------------------------------------------------------------------------- */
+/* ------------------------------------- HELPER + HANDLER --------------------------------------- */
+/* ---------------------------------------------------------------------------------------------- */
+
+/*********************************************************************************************
+ * debugExceptionHandler
+ * 
+ * @brief
+ * Debug function for exception handling. Accepts four integer parameters that can be viewed
+ * in registers a0-a3 when a breakpoint is set on this function.
+ * 
+ * @param key - Unique identifier showing where in the code this debug call happens
+ * @param param1 - First parameter (typically exception code)
+ * @param param2 - Second parameter (typically cause register value)
+ * @param param3 - Third parameter (typically EPC or other state info)
+ * 
+ * @return void
+***********************************************************************************************/
+void debugExceptionHandler(int key, int param1, int param2, int param3) {
+    /* Function intentionally left empty - serves as breakpoint target */
+}
+
+
+
+/*********************************************************************************************
+ * exceptionTrapHandler
+ * 
+ * @brief
+ * This function is used to handle exceptions. It is the entry point for all exceptions.
+ * The cause of this exception is encoded in the .ExcCode field of the Cause register
+ * (Cause.ExcCode) in the saved exception state. [Section 3.3-pops]
+ *      - For exception code 0 (Interrupts), processing should be passed along to your
+ *          Nucleus’s device interrupt handler. [Section 3.6]
+ *      - For exception codes 1-3 (TLB exceptions), processing should be passed
+ *          along to your Nucleus’s TLB exception handler. [Section 3.7.3]
+ *      - For exception codes 4-7, 9-12 (Program Traps), processing should be passed
+ *          along to your Nucleus’s Program Trap exception handler. [Section 3.7.2]
+ *      - For exception code 8 (SYSCALL), processing should be passed along to
+ *          your Nucleus’s SYSCALL exception handler. [Section 3.5]
+ * (Pandos page 24)
+ * 
+ * @protocol
+ * 1. Get the execution code from the cause register
+ * 2. Check the execution code and call the appropriate handler
+ * 
+ * @param void
+ * @return void
+***********************************************************************************************/
+void exceptionTrapHandler() {
+    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
+    int execCode = ((savedState->s_cause) & 0x0000007C) >> 2;
+    
+    /* Debug call - identifies entry to exception handler */
+    debugExceptionHandler(100, execCode, savedState->s_cause, savedState->s_pc);
+
+    if (execCode == 0) { /* if the exception code is 0 */
+        /* Debug call - before interrupt handler */
+        debugExceptionHandler(110, execCode, 0, 0);
+        interruptTrapHandler(); /* calling the Nucleus' device interrupt handler function */
+    }
+    else if (execCode <= 3) { /* if the exception code is between 1 and 3 (inclusive) */
+        /* Debug call - before TLB handler */
+        debugExceptionHandler(120, execCode, savedState->s_entryHI, savedState->s_status);
+        tlbTrapHandler(); /* calling the Nucleus' TLB exception handler function */
+    }
+    else if (execCode == 8) { /* if the exception code is 8 */
+        /* Debug call - before SYSCALL handler */
+        debugExceptionHandler(130, execCode, savedState->s_a0, savedState->s_a1);
+        systemTrapHandler(); /* calling the Nucleus' SYSCALL exception handler function */
+    }
+    else {
+        /* Debug call - before program trap handler */
+        debugExceptionHandler(140, execCode, savedState->s_cause, savedState->s_pc);
+        programTrapHandler();
+    }
+}
+
+
+/* void exceptionTrapHandler() {
+    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
+    int execCode = ((savedState->s_cause) & 0x0000007C) >> 2; */
+
+   /*  switch (execCode) {
+        case 0:
+            interruptTrapHandler();
+            break;
+        case 1:    
+        case 2:    
+        case 3:  
+            tlbTrapHandler();
+            break;
+        case 8:   
+            systemTrapHandler();
+            break;
+        case 4:  
+        case 5:  
+        case 6: 
+        case 7:    
+        case 9: 
+        case 10:   
+        case 11:    
+        case 12:   
+            programTrapHandler();
+            break;
+        default: 
+            programTrapHandler();
+            break;
+    } */
+
+   	/* if (execCode == 0){ */ /* if the exception code is 0 */
+		/* interruptTrapHandler();  *//* calling the Nucleus' device interrupt handler function */
+	/* }
+	if (execCode <= 3){  *//* if the exception code is between 1 and 3 (inclusive) */
+		/* tlbTrapHandler();  *//* calling the Nucleus' TLB exception handler function */
+	/* }
+	if (execCode == 8){  *//* if the exception code is 8 */
+		/* systemTrapHandler();  *//* calling the Nucleus' SYSCALL exception handler function */
+	/* }
+	programTrapHandler();
+}
+ */
+
+/************************************************************************************************
+ * initPassUpVector
+ * 
+ * @brief
+ * The variable currentProceessorState is a pointer to the processor state saved at the time an exception occurred
+ * It stores the state captured by the CPU when an event or exception is raised. 
+ * Exception or interrupt handler use its value to either pass control to the appropriate exception handler or terminate the process.
+ * (pandos page 24)
+ * 
+ * @protocol
+ * 0. Create a pointer to the pass up vector
+ * 1. Set the TLB Refill handler to the uTLB_RefillHandler function
+ * 2. Set the TLB Refill stack pointer to the KERNELSTACK
+ * 3. Set the exception handler to the exceptionTrapHandler function
+ * 4. Set the exception stack pointer to the KERNELSTACK
+ * 
+ * @note
+ * The system can later restore the state if the exception is handled and the process resumes.
+ * The OS can examine the state to decide if the exception can be managed or if the process should be terminated.
+ * 
+ * @note
+ * The Pass Up Vector is a structure in memory that helps the BIOS 
+ * know where to transfer control when an exception occurs.
+ * It is similar to a table of contents for exception handling (or a transformer :)?)
+ * 
+ * @param void
+ * @return void
+*********************************************************************************************/
+void initPassUpVector() {
+    /* STEP 0: create a pointer */
+    passupvector_t *pass_up_vector = (passupvector_t *) PASSUPVECTOR;
+
+    /* STEP 1 + 2 + 3 + 4: set the TLB Refill handler, TLB Refill stack pointer, 
+    exception handler, and exception stack pointer */
+    pass_up_vector->tlb_refll_handler  = (memaddr) uTLB_RefillHandler;
+    pass_up_vector->tlb_refll_stackPtr = (memaddr) KERNELSTACK;    
+    pass_up_vector->exception_handler  = (memaddr) exceptionTrapHandler; 
+    pass_up_vector->exception_stackPtr = (memaddr) KERNELSTACK; 
+}
+
+/*********************************************************************************************
+ * updateProcessTimeHelper
+ * 
+ * @brief
+ * This function is used to update the process time of the current process.
+ * The function takes the process, start time, and end time as arguments.
+ * It updates the process time by adding the difference between the end time and start time.
+ * 
+ * @protocol
+ * 1. Update the process time by adding the difference between the end time and start time
+ * 
+ * @param pcb_PTR proc: pointer to the process
+ * @param cpu_t start: start time
+ * @param cpu_t end: end time
+ * @return void
+ ***********************************************************************************************/
+void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end) {
+    process->p_time += (end - start);
+}
+
+/*********************************************************************************************
+ * initDeviceSemaphoresHelper
+ * 
+ * @brief
+ * This function is used to initialize the device semaphores.
+ * The function sets the interval timer semaphore to 0 (unblocked) 
+ * and initializes each device semaphore to 0 (unblocked).
+ * 
+ * @protocol
+ * 1. Set the interval timer semaphore to 0 (unblocked) 
+ * 2. Initialize each device semaphore to 0 (unblocked)
+ * 
+ * @note 
+ * The Nucleus maintains one integer semaphorr
+ * for each external (sub)device in µMPS3, plus one additional semaphore
+ * to support the Pseudo-clock.
+ * 
+ * @param void
+ * @return void
+ ***********************************************************************************************/
+void initDeviceSemaphoresHelper() {
+    semaphoreInternal = 0;
+    /* Set the interval timer semaphore to 0 (unblocked) 
+    Initialize each device semaphore to 0 (unblocked)*/
+    int i;
+    for (i = 0; i < MAX_DEVICE_COUNT; i++) {
+        semaphoreDevices[i] = 0;
+    }
+}
+
+
 
 
 
@@ -118,15 +337,7 @@ state_PTR savedExceptionState;
  * @param void
  * @return int
  ***********************************************************************************************/
-
 void main() {
-
-    /* Step 1: init the pass up vector */
-    initPassUpVector();
-
-    /* step 2 + 3: init PCB and ACL */
-    initPcbs();
-    initASL();
     
     /* Step 4: init the process count */
     processCount = 0;
@@ -140,20 +351,42 @@ void main() {
     /* Step 7: set the current process to NULL */
     currentProcess = NULL;
 
+    /* Step 9: init the device semaphores */
+/*     initDeviceSemaphoresHelper();
+ */
+    int i;
+	for (i = 0; i < MAX_DEVICE_COUNT; i++){
+		/* initializing the device semaphores */
+		semaphoreDevices[i] = 0;
+	}
+
+    /* step 2 + 3: init PCB and ACL */
+    initPcbs();
+    initASL();
+
+    /* Step 1: init the pass up vector */
+    /* initPassUpVector(); */
+
+    passupvector_t *procVec;
+    procVec = (passupvector_t *) PASSUPVECTOR; /* initializing procVec to be a pointer to the address of the Process 0 Pass Up Vector */
+	procVec->tlb_refll_handler = (memaddr) uTLB_RefillHandler; /* initializing the address for handling TLB-Refill events */
+	procVec->tlb_refll_stackPtr = KERNELSTACK; /* initializing the stack pointer for handling Nucleus TLB-Refill events */
+	procVec->exception_handler = (memaddr) exceptionTrapHandler; /* initializing the address for handling general exceptions */
+	procVec->exception_stackPtr = KERNELSTACK; /* initializing the stack pointer for handling general exceptions */
+
     /* Step 8: load the interval timer with the value of PSECOND (100000)
     this can be use for scheduling */
     LDIT(PSECOND); 
 
-    /* Step 9: init the device semaphores */
-    initDeviceSemaphoresHelper();
-
     /* Step 10: allocate a new process and set its initial state */
     pcb_PTR new_process = allocPcb();
+    devregarea_t *temp;
 
     if (new_process != NULL) { /* if allocate is succesful */
         
         /* set the initial state of the new process */
-        new_process->p_s.s_sp = RAMBASEADDR + RAMBASESIZE;
+        temp = (devregarea_t *) RAMBASEADDR;
+        new_process->p_s.s_sp = temp->rambase + temp->ramsize;
         new_process->p_s.s_pc = (memaddr) test;
         new_process->p_s.s_t9 = (memaddr) test;
         new_process->p_s.s_status = ALLOFF | IEPON | PLTON | IMON;
@@ -162,108 +395,8 @@ void main() {
         insertProcQ(&readyQueue, new_process);
         processCount++;
         scheduler();
-        return 0;
     }
 
     /* If the allocation fails, the system is in a panic state */
     PANIC();
-    return 0;
-}
-
-/* ---------------------------------------------------------------------------------------------- */
-/* ------------------------------------- HELPER + HANDLER --------------------------------------- */
-/* ---------------------------------------------------------------------------------------------- */
-
-
-/************************************************************************************************
- * initPassUpVector
- * 
- * @brief
- * The variable currentProceessorState is a pointer to the processor state saved at the time an exception occurred
- * It stores the state captured by the CPU when an event or exception is raised. 
- * Exception or interrupt handler use its value to either pass control to the appropriate exception handler or terminate the process.
- * (pandos page 24)
- * 
- * @protocol
- * 0. Create a pointer to the pass up vector
- * 1. Set the TLB Refill handler to the uTLB_RefillHandler function
- * 2. Set the TLB Refill stack pointer to the KERNELSTACK
- * 3. Set the exception handler to the exceptionTrapHandler function
- * 4. Set the exception stack pointer to the KERNELSTACK
- * 
- * @note
- * The system can later restore the state if the exception is handled and the process resumes.
- * The OS can examine the state to decide if the exception can be managed or if the process should be terminated.
- * 
- * @note
- * The Pass Up Vector is a structure in memory that helps the BIOS 
- * know where to transfer control when an exception occurs.
- * It is similar to a table of contents for exception handling (or a transformer :)?)
- * 
- * @param void
- * @return void
-*********************************************************************************************/
-
-extern void initPassUpVector() {
-    /* STEP 0: create a pointer */
-    passupvector_t *pass_up_vector = (passupvector_t *) PASSUPVECTOR;
-
-    /* STEP 1 + 2 + 3 + 4: set the TLB Refill handler, TLB Refill stack pointer, 
-    exception handler, and exception stack pointer */
-    pass_up_vector->tlb_refll_handler  = (memaddr) uTLB_RefillHandler;
-    pass_up_vector->tlb_refll_stackPtr = (memaddr) KERNELSTACK;    
-    pass_up_vector->execption_handler  = (memaddr) exceptionTrapHandler; 
-    pass_up_vector->exception_stackPtr = (memaddr) KERNELSTACK; 
-}
-
-/*********************************************************************************************
- * updateProcessTimeHelper
- * 
- * @brief
- * This function is used to update the process time of the current process.
- * The function takes the process, start time, and end time as arguments.
- * It updates the process time by adding the difference between the end time and start time.
- * 
- * @protocol
- * 1. Update the process time by adding the difference between the end time and start time
- * 
- * @param pcb_PTR proc: pointer to the process
- * @param cpu_t start: start time
- * @param cpu_t end: end time
- * @return void
- ***********************************************************************************************/
-
-void updateProcessTimeHelper(pcb_PTR process, cpu_t start, cpu_t end) {
-    process->p_time += (end - start);
-}
-
-/*********************************************************************************************
- * initDeviceSemaphoresHelper
- * 
- * @brief
- * This function is used to initialize the device semaphores.
- * The function sets the interval timer semaphore to 0 (unblocked) 
- * and initializes each device semaphore to 0 (unblocked).
- * 
- * @protocol
- * 1. Set the interval timer semaphore to 0 (unblocked) 
- * 2. Initialize each device semaphore to 0 (unblocked)
- * 
- * @note 
- * The Nucleus maintains one integer semaphorr
- * for each external (sub)device in µMPS3, plus one additional semaphore
- * to support the Pseudo-clock.
- * 
- * @param void
- * @return void
- ***********************************************************************************************/
-
-void initDeviceSemaphoresHelper() {
-    semaphoreInternal = 0;
-    /* Set the interval timer semaphore to 0 (unblocked) 
-    Initialize each device semaphore to 0 (unblocked)*/
-    int i;
-    for (i = 0; i < MAX_DEVICE_COUNT; i++) {
-        semaphoreDevices[i] = 0;
-    }
 }

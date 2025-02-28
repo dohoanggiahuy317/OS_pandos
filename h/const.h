@@ -157,7 +157,7 @@
 
 
 /* Device Constants */
-#define MAX_DEVICE_COUNT  (DEVINTNUM * DEVPERINT + 1)
+#define MAX_DEVICE_COUNT  49
 #define CLOCK_INDEX      (MAX_DEVICE_COUNT - 1)
 
 
@@ -167,7 +167,7 @@
 #define	PROCESS_INIT_START		0
 
 #define SUCCESS_CONST		0
-#define ERRORCONST			-1
+#define ERROR_CONST			-1
 
 #define BASE_LINE        3
 

@@ -48,56 +48,37 @@
 **********************************************************************************************/
 
 
+#include "../h/asl.h"
 #include "../h/types.h"
 #include "../h/const.h"
-#include "../h/initial.h"
-#include "../h/exceptions.h"
-#include "../h/interrupts.h"
-#include "../h/scheduler.h"
 #include "../h/pcb.h"
-#include "../h/asl.h"
+#include "../h/scheduler.h"
+#include "../h/interrupts.h"
+#include "../h/exceptions.h"
+#include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
+
+
+/* function declarations */
+HIDDEN void blockCurrentProcessHelper(int *this_semaphore);
+HIDDEN void createProcess(state_PTR state_process, support_PTR support_process);
+HIDDEN void terminateProcess(pcb_PTR terminate_process);
+HIDDEN void passeren(int *this_semaphore);
+HIDDEN void verhogen(int *this_semaphore);
+HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for_read);
+HIDDEN void getCPUTime();
+HIDDEN void waitForClock();
+HIDDEN void getSupportData();
+
  
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ Variables ----------------------------------------- */
 /* ---------------------------------------------------------------------------------------------- */
 
 int sysCallNum;
- 
-/*********************************************************************************************
- * updateProcessTimeHelper
- * 
- * @brief
- * This function move the info from one state to another state
- * 
- * @protocol
- * 1. copy all the field
- * 2. copy all the general purpose registers
- * 
- * @note
- * as in C is shallow copy, we move the state from the source to the destination by carefully
- * copying each field of the state structure.
- * We also have to take care all thesysCallOutRangeHandler(); general purpose registers associated with the state
- * 
- * @param source_state: the source state
- * @param destination_state: the destination state
- * @return void
-*********************************************************************************************/
+cpu_t curr_TOD;
 
-void moveStateHelper(state_PTR source_state, state_PTR destination_state){
 
-    /* Step 1: copy all the field */
-	destination_state->s_entryHI = source_state->s_entryHI;
-	destination_state->s_cause = source_state->s_cause;
-	destination_state->s_status = source_state->s_status;
-	destination_state->s_pc = source_state->s_pc;
-
-	/* Step 2: copy the register */
-    int i;
-	for (i = 0; i < STATEREGNUM; i++){ 
-		destination_state->s_reg[i] = source_state->s_reg[i];
-	}
-}
 
 /*********************************************************************************************
  * addPigeonCurrentProcessHelper
@@ -149,9 +130,9 @@ void addPigeonCurrentProcessHelper() {
 
 void blockCurrentProcessHelper(int *this_semaphore){
 	STCK(curr_TOD);
-	currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-	
+/*     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+ */	
+    currentProcess->p_time += (curr_TOD - start_TOD);
     insertBlocked(this_semaphore, currentProcess);
     currentProcess = NULL;
 }
@@ -193,7 +174,7 @@ void blockCurrentProcessHelper(int *this_semaphore){
  * @return void
 *********************************************************************************************/
 
-HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) {
+void createProcess(state_PTR state_process, support_PTR support_process) {
 
     /* S1: It allocates a new PCB */
     pcb_PTR new_pcb = allocPcb();
@@ -227,13 +208,14 @@ HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) 
     } else{ /* S9: no new PCB for allocation  */
         
         /* Place the value -1 in the caller’s v0. */
-        currentProcess->p_s.s_v0 = ERRORCONST; 
+        currentProcess->p_s.s_v0 = ERROR_CONST; 
     }
     
     /* update the timer for the current process and return control to current process */
     STCK(curr_TOD);
-    currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD); 
-    
+/*     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+ */    
+    currentProcess->p_time += (curr_TOD - start_TOD);
     /* S10: return control to the current process */
     switchContext(currentProcess);
 }
@@ -275,15 +257,17 @@ HIDDEN void createProcess(state_PTR state_process, support_PTR support_process) 
  * @return void
 *********************************************************************************************/
 
-HIDDEN void terminateProcess(pcb_PTR terminate_process){ 
+void terminateProcess(pcb_PTR terminate_process){ 
+
+        /* Step 2: Check the position of the process using semaphore */
+        int *this_semaphore = terminate_process->p_semAdd;
 
     /* Step 1: Recursively terminate all childrn */
     while ( !(emptyChild(terminate_process)) ) {
         terminateProcess(removeChild(terminate_process));
     }
 
-    /* Step 2: Check the position of the process using semaphore */
-    int *this_semaphore = terminate_process->p_semAdd;
+
 
     /* If the process to be terminated is the current process */
     if (terminate_process == currentProcess) {
@@ -339,7 +323,7 @@ HIDDEN void terminateProcess(pcb_PTR terminate_process){
  * @return void
 *********************************************************************************************/
 
-HIDDEN void passeren(int *this_semaphore){
+void passeren(int *this_semaphore){
     
     /* Decrement the semaphore value by 1 */
     (*this_semaphore)--;
@@ -352,8 +336,9 @@ HIDDEN void passeren(int *this_semaphore){
 
     /* update the timer for the current process and return control to current process */
     STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-    
+/*     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+ */    
+    currentProcess->p_time += (curr_TOD - start_TOD);
     /* return control to the current process */
     switchContext(currentProcess);
 }
@@ -377,20 +362,21 @@ HIDDEN void passeren(int *this_semaphore){
  * @return void
 **********************************************************************************************/
 
-HIDDEN void verhogen(int *this_semaphore){
+void verhogen(int *this_semaphore){
     /* Increment the semaphore value by 1 */
     (*this_semaphore)++;
 
     if (*this_semaphore <= 0) { 
         /* If the value of the semaphore is less than or equal to 0, the process must be unblocked */
-        pcb_PTR temp = removeBlocked(this_semaphore);
-        insertProcQ(&readyQueue, temp);
+        pcb_PTR this_pcb = removeBlocked(this_semaphore);
+        insertProcQ(&readyQueue, this_pcb);
     }
 
     /* update the timer for the current process and return control to current process */
     STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-    
+    /* updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD); */
+    currentProcess->p_time += (curr_TOD - start_TOD);
+
     /* return control to the current process */
     switchContext(currentProcess);
 }
@@ -432,32 +418,36 @@ HIDDEN void verhogen(int *this_semaphore){
  * @return void
 *********************************************************************************************/
 
-HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for_read){
+void waitForIO(int interrupt_line_number, int device_number, int wait_for_read){
 
     /* Step 1: Find the index of the semaphore */
     int semaphore_index = ((interrupt_line_number - BASE_LINE) * DEVPERINT) + device_number;
 
     /* Step 2: check on read or write operation */
-    if (interrupt_line_number == LINE7 && wait_for_read == FALSE){ 
+    if (interrupt_line_number == LINE7 && wait_for_read != TRUE){ 
         semaphore_index += DEVPERINT; 
     }
 
     /* Step 3: Decrease semaphore and increase soft block count */
-    (semaphoreDevices[semaphore_index])--;
     softBlockedCount++;
+    (semaphoreDevices[semaphore_index])--;
+    
 
     /* Step 4: If the value of the semaphore is less than 0, the process must be blocked */
-    if (semaphoreDevices[semaphore_index] < 0) { 
+/*     if (semaphoreDevices[semaphore_index] < 0) { 
         blockCurrentProcessHelper(&semaphoreDevices[semaphore_index]);
         scheduler();
-    }
+    } */
 
     /* Step 5: update the timer for the current process and return control to current process */
-    STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+/*     STCK(curr_TOD);
+ */    /* (currentProcess, start_TOD, curr_TOD); */
 
     /* return control to the current process */
-    switchContext(currentProcess);
+    /* switchContext(currentProcess); */
+
+	blockCurrentProcessHelper(&semaphoreDevices[semaphore_index]); /* block the Current Process on the ASL */
+	scheduler();
 }
 
 /*********************************************************************************************
@@ -499,20 +489,24 @@ HIDDEN void waitForIO(int interrupt_line_number, int device_number, int wait_for
  * @param void
  * @return void
 *********************************************************************************************/
-
-HIDDEN void getCPUTime(){
+void getCPUTime(){
 
     /* Step 1: The function places the accumulated processor time used by the requesting process in v0 */
-    STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-    currentProcess->p_s.s_v0 = currentProcess->p_time;
+    /*STCK(curr_TOD);
+    (currentProcess, start_TOD, curr_TOD);
+    currentProcess->p_s.s_v0 = currentProcess->p_time;*/
 
     /* Step 2: update the syscall CPU time for this process */
-    STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+    /*STCK(curr_TOD);
+    (currentProcess, start_TOD, curr_TOD);*/
 
     /* Step 3: return control to the current process */
-    switchContext(currentProcess);
+    /*switchContext(currentProcess);*/
+
+    STCK(curr_TOD); /* storing the current value on the Time of Day clock into curr_tod */
+	currentProcess->p_s.s_v0 = currentProcess->p_time + (curr_TOD - start_TOD); /* placing the accumulated processor time used by the requesting process in v0 */
+	currentProcess->p_time = currentProcess->p_time + (curr_TOD - start_TOD); /* updating the accumulated CPU time for the Current Process */
+	switchContext(currentProcess);
 }
 
 /*********************************************************************************************
@@ -539,23 +533,27 @@ HIDDEN void getCPUTime(){
  * @param void
  * @return void
 *********************************************************************************************/
-
-HIDDEN void waitForClock(){
+void waitForClock(){
     /* STEP 1: the current process got block for the clock, decrease the semaphore by 1 */
     (semaphoreDevices[CLOCK_INDEX])--;
 
     /* STEP 2: If the value of the semaphore is less than 0, the process must be blocked */
-    if (semaphoreDevices[CLOCK_INDEX] < 0) { 
+    /* if (semaphoreDevices[CLOCK_INDEX] < 0) { 
+        softBlockedCount++;
         blockCurrentProcessHelper(&semaphoreDevices[CLOCK_INDEX]);
         scheduler();
-    }
+    } */
 
     /* STEP 3: update the timer for the current process and return control to current process */
-    STCK(curr_TOD);
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+  /*   STCK(curr_TOD);
+    (currentProcess, start_TOD, curr_TOD); */
 
     /* return control to the current process */
-    switchContext(currentProcess);
+  /*   switchContext(currentProcess); */
+
+  	blockCurrentProcessHelper(&semaphoreDevices[CLOCK_INDEX]); /* block the Current Process on the ASL */
+    softBlockedCount++;
+	scheduler();
 }
 
 /*********************************************************************************************
@@ -572,15 +570,17 @@ HIDDEN void waitForClock(){
  * @param void
  * @return void
 *********************************************************************************************/
-
 void getSupportData() {
     /* Step 1: The function place the support Struct in v0 */
     currentProcess->p_s.s_v0 = (int)(currentProcess->p_supportStruct); 
 
     /* Step 2: update the syscall CPU time for this process */
     STCK(curr_TOD); 
-    updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
-    switchContext(currentProcess); 
+/*     updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+ */    
+    currentProcess->p_time += (curr_TOD - start_TOD); 
+
+ switchContext(currentProcess); 
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -621,27 +621,29 @@ void getSupportData() {
  * 
  * @param exceptionCode: the exception code 
 *********************************************************************************************/
-
-void passUpOrDie(int exceptionCode){ 
+void passUpOrDie(int exception_code){ 
 
     if (currentProcess->p_supportStruct != NULL){
 
         /* Step 1.1: If the current process has a support structure, pass up the exception */
-        moveStateHelper(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exceptionCode]));
+        moveStateHelper(savedExceptionState, &(currentProcess->p_supportStruct->sup_exceptState[exception_code]));
         
         STCK(curr_TOD);
-        updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD);
+        /* updateProcessTimeHelper(currentProcess, start_TOD, curr_TOD); */
+        currentProcess->p_time += (curr_TOD - start_TOD);
 
         /* Step 1.2: perform a LDCXT using the fields from the correct sup_exceptContext field of the Current Process */
         LDCXT(
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_stackPtr, 
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_status,
-            currentProcess->p_supportStruct->sup_exceptContext[exceptionCode].c_pc);
+            currentProcess->p_supportStruct->sup_exceptContext[exception_code].c_stackPtr, 
+            currentProcess->p_supportStruct->sup_exceptContext[exception_code].c_status,
+            currentProcess->p_supportStruct->sup_exceptContext[exception_code].c_pc);
     }
     else{
         /* Call the SYS2, call the systemTrapHandler as a SYSCALL */
-        sysCallNum = SYS2_NUM;
+        /*sysCallNum = SYS2_NUM;*/
         terminateProcess(currentProcess);
+        currentProcess = NULL;
+        scheduler();
     }
 }
 
@@ -661,9 +663,9 @@ void passUpOrDie(int exceptionCode){
  * @param void
  * @return void
 *********************************************************************************************/
-void sysCallOutRangeHandler(){
+/* void sysCallOutRangeHandler(){
     passUpOrDie(GENERALEXCEPT); 
-}
+} */
 
 /*********************************************************************************************
  * programTrapHandler
@@ -679,7 +681,6 @@ void sysCallOutRangeHandler(){
  * @param void
  * @return void
 *********************************************************************************************/
-
 void programTrapHandler(){
     passUpOrDie(GENERALEXCEPT);
 }
@@ -697,11 +698,9 @@ void programTrapHandler(){
  * @param void
  * @return void
 *********************************************************************************************/
-
-void userModeTrapHandler() {
+/* void userModeTrapHandler() {
     programTrapHandler();
-}
-
+} */
 
 
 /*********************************************************************************************
@@ -718,13 +717,9 @@ void userModeTrapHandler() {
  * @param void
  * @return void
 *********************************************************************************************/
-
 void tlbTrapHandler(){
     passUpOrDie(PGFAULTEXCEPT); 
 }
-
-
-
 
 
 /*********************************************************************************************
@@ -771,19 +766,18 @@ void tlbTrapHandler(){
  * 
  * @param void
  * @return void
- * *********************************************************************************************/
-
+*********************************************************************************************/
 void systemTrapHandler() {
 
     /* Get the BIOSDATAPAGE */
-    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
-    sysCallNum = savedState->s_a0;
-    savedState->s_pc += WORDLEN;
+    savedExceptionState = (state_PTR) BIOSDATAPAGE;
+    sysCallNum = savedExceptionState->s_a0;
+    savedExceptionState->s_pc += WORDLEN;
     
     /* STEP 1: redirect if it is usermode and set the exception code to RI */
-    if (( (savedState->s_status) & USERPON) != ALLOFF) {
+    if (( (savedExceptionState->s_status) & USERPON) != ALLOFF) {
 
-        savedState->s_cause = (savedState->s_cause) & 0xFFFFFF28; /* setting the Cause.ExcCode bits in the stored exception state to RI (10) */
+        savedExceptionState->s_cause = (savedExceptionState->s_cause) & 0xFFFFFF28; /* setting the Cause.ExcCode bits in the stored exception state to RI (10) */
 		programTrapHandler();
 
         /*savedState->s_cause &= ~(CAUSE_INT_MASK << EXC_CODE_SHIFT);
@@ -792,9 +786,11 @@ void systemTrapHandler() {
     }
 
     /* STEP 2: check if the syscall number is in range */
-    if (sysCallNum < SYS1_NUM || sysCallNum > SYS8_NUM) {
-        sysCallOutRangeHandler();
-    }
+    if ((sysCallNum < SYS1_NUM )|| (sysCallNum > SYS8_NUM)) {
+/*         sysCallOutRangeHandler();
+ */ programTrapHandler();
+
+}
 
     /* STEP 3: add the state to the current process */
     addPigeonCurrentProcessHelper(currentProcess);
@@ -832,62 +828,5 @@ void systemTrapHandler() {
             getSupportData();
             break;
     
-    }
-}
-
-/*********************************************************************************************
- * exceptionTrapHandler
- * 
- * @brief
- * This function is used to handle exceptions. It is the entry point for all exceptions.
- * The cause of this exception is encoded in the .ExcCode field of the Cause register
- * (Cause.ExcCode) in the saved exception state. [Section 3.3-pops]
- *      - For exception code 0 (Interrupts), processing should be passed along to your
- *          Nucleus’s device interrupt handler. [Section 3.6]
- *      - For exception codes 1-3 (TLB exceptions), processing should be passed
- *          along to your Nucleus’s TLB exception handler. [Section 3.7.3]
- *      - For exception codes 4-7, 9-12 (Program Traps), processing should be passed
- *          along to your Nucleus’s Program Trap exception handler. [Section 3.7.2]
- *      - For exception code 8 (SYSCALL), processing should be passed along to
- *          your Nucleus’s SYSCALL exception handler. [Section 3.5]
- * (Pandos page 24)
- * 
- * @protocol
- * 1. Get the execution code from the cause register
- * 2. Check the execution code and call the appropriate handler
- * 
- * @param void
- * @return void
-***********************************************************************************************/
-
-void exceptionTrapHandler() {
-    state_PTR savedState = (state_PTR) BIOSDATAPAGE;
-    int execCode = (savedState->s_cause >> 2) & 0x1F;
-
-    switch (execCode) {
-        case 0:
-            interruptTrapHandler();
-            break;
-        case 1:    
-        case 2:    
-        case 3:  
-            tlbTrapHandler();
-            break;
-        case 8:   
-            systemTrapHandler();
-            break;
-        case 4:  
-        case 5:  
-        case 6: 
-        case 7:    
-        case 9: 
-        case 10:   
-        case 11:    
-        case 12:   
-            programTrapHandler();
-            break;
-        default: 
-            passUpOrDie(GENERALEXCEPT);
-            break;
     }
 }

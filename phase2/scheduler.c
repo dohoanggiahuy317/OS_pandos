@@ -35,15 +35,52 @@
  * @author
  * JaWeee Do
  **********************************************************************************************/
-
 #include "../h/asl.h"
 #include "../h/types.h"
 #include "../h/const.h"
 #include "../h/pcb.h"
 #include "../h/scheduler.h"
 #include "../h/interrupts.h"
+#include "../h/exceptions.h"
 #include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
+
+
+
+
+/*********************************************************************************************
+ * updateProcessTimeHelper
+ * 
+ * @brief
+ * This function move the info from one state to another state
+ * 
+ * @protocol
+ * 1. copy all the field
+ * 2. copy all the general purpose registers
+ * 
+ * @note
+ * as in C is shallow copy, we move the state from the source to the destination by carefully
+ * copying each field of the state structure.
+ * We also have to take care all thesysCallOutRangeHandler(); general purpose registers associated with the state
+ * 
+ * @param source_state: the source state
+ * @param destination_state: the destination state
+ * @return void
+*********************************************************************************************/
+void moveStateHelper(state_PTR source_state, state_PTR destination_state){
+
+    /* Step 1: copy all the field */
+	destination_state->s_entryHI = source_state->s_entryHI;
+	destination_state->s_cause = source_state->s_cause;
+	destination_state->s_status = source_state->s_status;
+	destination_state->s_pc = source_state->s_pc;
+
+	/* Step 2: copy the register */
+    int i;
+	for (i = 0; i < STATEREGNUM; i++){ 
+		destination_state->s_reg[i] = source_state->s_reg[i];
+	}
+}
 
 
 /**********************************************************************************************
@@ -69,7 +106,6 @@
  * @param pcb_PTR target_process: pointer to the process to be switched in.
  * @return void
  * **********************************************************************************************/
-
 void switchContext(pcb_PTR target_process) {
     /* Step 1: set the process */
     currentProcess = target_process;
@@ -78,7 +114,7 @@ void switchContext(pcb_PTR target_process) {
     STCK(start_TOD);
 
     /* Step 3: load the state of the target process */
-    LDST(&(currentProcess->p_s));
+    LDST(&(target_process->p_s));
 }
 
 
@@ -115,41 +151,68 @@ void switchContext(pcb_PTR target_process) {
  * **********************************************************************************************/
 
 void scheduler() {
-    pcb_PTR next_process;  /* pointer to next process to run */
+   /*  pcb_PTR next_process; */  /* pointer to next process to run */
 
     /* If the Ready Queue is not empty, dispatch the next process */\
-    if (emptyProcQ(readyQueue)) {
+    /* if (emptyProcQ(readyQueue)) { */
         /* Ready Queue is empty */
-        if (processCount == 0) {
-            /* No processes in the system; halt. */
-            HALT();
+/*         if (processCount == 0) {
+ */            /* No processes in the system; halt. */
+/*             HALT();
         }
         else if (softBlockedCount > 0) {
-            /* There are processes in the system but some are blocked waiting for an event.
+ */            /* There are processes in the system but some are blocked waiting for an event.
                Prepare to wait:
                  - Enable interrupts in the status register.
                  - Disable the PLT by loading it with a very large value (INF_TIME).
                  - Execute the WAIT instruction to wait for an event.
             */
-            setSTATUS(ALLOFF | IMON | IECON);
+/*             setSTATUS(ALLOFF | IMON | IECON);
             setTIMER(INF_TIME);
             WAIT();
         }
         else {
-            /* Deadlock detected */
-            PANIC();
+ */            /* Deadlock detected */
+/*             PANIC();
         }
         
     } else {
-        /* Step 1: remove the process from the head of the Ready Queue */
-        next_process = removeProcQ(&readyQueue);
+ */        /* Step 1: remove the process from the head of the Ready Queue */
+/*         next_process = removeProcQ(&readyQueue);
         currentProcess = next_process;
         
-        /* Step 2: load 5 milliseconds on the PLT */
-        LDIT(PLT_TIME_SLICE);
-        
+ */        /* Step 2: load 5 milliseconds on the PLT */
+/*         LDIT(PLT_TIME_SLICE);
+ */        
         /* Step 3: load the state of the current process */
-        LDST(&(currentProcess->p_s));
+/*         LDST(&(currentProcess->p_s));
     }
+ */
+
+
+    currentProcess = removeProcQ(&readyQueue); /* removing the pcb from the head of the ReadyQueue and storing its pointer in currentProc */
+	if (currentProcess != NULL){ /* if the Ready Queue is not empty */
+		setTIMER(5000); /* loading five milliseconds on the processor's Local Timer (PLT) */
+		switchContext(currentProcess); /* invoking the internal function that will perform the LDST on the Current Process' processor state */
+	}
+
+	/* We know the ReadyQueue is empty. */
+	if (processCount == 0){ /* if the number of started, but not yet terminated, processes is zero */
+		HALT(); /* invoking the HALT() function to halt the system and print a regular shutdown message on terminal 0 */
+	}
+	
+	if ((processCount > 0) && (softBlockedCount > 0)){ /* if the number of started, but not yet terminated, processes is greater than zero and there's at least one such process is "blocked" */
+		setSTATUS(ALLOFF | IMON | IECON); /* enabling interrupts for the Status register so we can execute the WAIT instruction */
+		setTIMER(INF_TIME); /* loading the PLT with a very large value so that the first interrupt that occurs after entering a WAIT state is not for the PLT */
+		WAIT(); /* invoking the WAIT() function to idle the processor, as it needs to wait for a device interrupt to occur */
+	}
+
+	/* A deadlock situation is occurring (i.e., procCnt > 0 && softBlockCnt == 0) */
+	PANIC(); /* invoking the PANIC() function to stop the system and print a warning message on terminal 0 */
+
+
+
+
+
 }
 
