@@ -1,6 +1,8 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
+#include "../h/const.h"
+#include "../h/types.h"
 
 extern void switchContext(pcb_PTR nextProcess);
 extern void scheduler();

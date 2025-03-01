@@ -31,15 +31,14 @@
  * JaWeee Do
 *********************************************************************************************/
 
-
-#include "../h/asl.h"
+#include "../h/initial.h"
+#include "../h/scheduler.h"
+#include "../h/exceptions.h"
+#include "../h/interrupts.h"
 #include "../h/types.h"
 #include "../h/const.h"
+#include "../h/asl.h"
 #include "../h/pcb.h"
-#include "../h/scheduler.h"
-#include "../h/interrupts.h"
-#include "../h/exceptions.h"
-#include "../h/initial.h"
 #include "/usr/include/umps3/umps/libumps.h"
 
 
@@ -55,10 +54,6 @@ HIDDEN int findInterruptDevice(int interrupt_line_number);
 
 /* Calculate the remaining time in the time slice of the current process */
 cpu_t current_process_time_left; 
-
-/* Record the time of the interrupt */
-/* cpu_t interrupt_TOD; */
-
 
 /* ---------------------------------------------------------------------------------------------- */
 /* ------------------------------------------ INTERRUPT ----------------------------------------- */
@@ -153,8 +148,7 @@ int findInterruptDevice(int interrupt_line_number){
  ***********************************************************************************************/
 void PLTInterruptHandler() {
 
-    cpu_t curr_TOD;
-
+    /* Step 0: Get the current process, if there is no current process, panic */
     if (currentProcess != NULL) {
 
         /* Step 1: Acknowledge the PLT interrupt by reloading the timer with 5 milliseconds. */
@@ -178,11 +172,7 @@ void PLTInterruptHandler() {
 
     /* Step 0: Get the current process, if there is no current process, panic */    
     PANIC();
-
-
 }
-
-
 
 /*********************************************************************************************
  * nonTimerInterruptHandler
@@ -214,7 +204,7 @@ void nonTimerInterruptHandler() {
      * This register is used to both read information (the status when the I/O return you smth it done)
      * and send commands (you use this to tell I/O that you got the information, please don't annoy).
      * 
-     * @protocol
+     * @note
      * 1. The handler calculates the memory address based on the device’s known location in the system
      * Like a “mailbox” in memory holds the device’s information. 
      * 
@@ -223,32 +213,34 @@ void nonTimerInterruptHandler() {
      * are currently pending. If an interrupt is pending on interrupt 
      * line i, then Cause.IP[i] is set to 1.
      *
-     * 3. Shift the Cause register right by 8 bits to get the interrupt line number
+     * 3. Mask the Cause register with the interrupt line number to get the interrupt line number
      * 
      * 4. Find the device index in the device register area
      *      - Convert to base 0 index
      *      - Multiply number of devices per interrupt line.
      *      - Add the device number  
+     * 
+     * @protocol
+     * 1. Mask the Cause register with the interrupt line number to get the interrupt line number
+     * 2. Find the device number
+     * 3. Find the device index in the device register area
      */
-/*     int interrupt_line_number = ((savedExceptionState->s_cause >> 11) & 0x1F) + 3;
- */
+
+    /* get the interrupt line number by masking (Step 3) */
     int interrupt_line_number;
 	if (((savedExceptionState->s_cause) & 0x00000800) != ALLOFF){ 
 		interrupt_line_number = LINE3;
-	}
-	else if (((savedExceptionState->s_cause) & 0x00001000) != ALLOFF){
+	} else if (((savedExceptionState->s_cause) & 0x00001000) != ALLOFF){
 		interrupt_line_number = LINE4; 
-	}
-	else if (((savedExceptionState->s_cause) & 0x00002000) != ALLOFF){ 
+	} else if (((savedExceptionState->s_cause) & 0x00002000) != ALLOFF){ 
 		interrupt_line_number = LINE5;
-	}
-	else if (((savedExceptionState->s_cause) & 0x00004000) != ALLOFF){ 
+	} else if (((savedExceptionState->s_cause) & 0x00004000) != ALLOFF){ 
 		interrupt_line_number = LINE6;
-	}
-	else{ 
+	} else { 
 		interrupt_line_number = LINE7; 
 	}
 
+    /* get the device number */
     int device_num = findInterruptDevice(interrupt_line_number);
 
     /* get the device index from the interrupt line number (similar to semaphore index in exception.c)*/
@@ -346,32 +338,6 @@ void nonTimerInterruptHandler() {
     }
 
     scheduler();
-
-/* 	if (pcb_to_unblock == NULL){
-		if (currentProcess != NULL){
-			addPigeonCurrentProcessHelper();
-			currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD);
-			setTIMER(current_process_time_left); 
-			switchContext(currentProcess); 
-		}
-		scheduler();
-	}
-
-	pcb_to_unblock->p_s.s_v0 = status_code;
-	insertProcQ(&readyQueue, pcb_to_unblock);
-	softBlockedCount--;
-	if (currentProcess != NULL){
-		addPigeonCurrentProcessHelper(); 
-		setTIMER(current_process_time_left);
-		currentProcess->p_time = currentProcess->p_time + (interrupt_TOD - start_TOD);
-		STCK(curr_TOD);
-		pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
-		switchContext(currentProcess); 
-	}
-	scheduler();  */
-
-
-
 }   
 
 
@@ -436,6 +402,8 @@ void intervalTimerInterruptHandler() {
  * 
  * @brief
  * This function is used to handle interrupts. It is called when an interrupt occurs.
+ * This is the entry point for handling interrupts in the system.
+ * 
  * The function first saves the current time and timer value, then saves the exception state from the BIOS data page.
  * It then extracts the pending interrupt bits from the Cause register and checks for PLT, Interval Timer, and device interrupts.
  * If no known interrupt is pending, it simply calls the scheduler.
@@ -443,9 +411,26 @@ void intervalTimerInterruptHandler() {
  * @protocol
  * 1. Save the current time and timer value
  * 2. Save the exception state from the BIOS data page
- * 3. Extract the pending interrupt bits from the Cause register
+ * 3. Extract the interrupt bits from the Cause register
  * 4. Check for PLT, Interval Timer, and device interrupts
  * 5. If no known interrupt is pending, call the scheduler
+ * 
+ * @def
+ * Interrupt peding bits are stored in the Cause register (s_cause) of the saved exception state.
+ * (Pandos page 18) The IP (interrupt pending) is an 8 bit fied from 8 to 15
+ * If an interrupt is pending on interrupt line i, then Cause.IP[i] is set to 1.
+ * The PLT interrupt is the highest priority, followed by the Interval Timer, and then device interrupts.
+ * 
+ * @note
+ * To check if it is a PLT interrupt, we use the bit 9 of the Cause register
+ * We mask it with 0x00000200 to get the bit 9, which is 0000 0000 0000 0010 0000 0000
+ * Similarly we check for the Interval Timer interrupt by masking the Cause register with 0x00000400
+ * For all the bit from 10 to 15, we check for the device interrupt by masking the Cause register with 0x00000800
+ * 
+ * IMPORTANT:
+ * Pandos page 31: WE NEED TO HANDLE ALL THE INTERRUPT IF THE BIT IS SET
+ * The lowe the number, the higher the priority, so we handle the interrupt with higher priority first
+ * then make sure to handle the lower priority interrupt
  * 
  * @param void
  * @return void
@@ -459,33 +444,26 @@ void interruptTrapHandler() {
     savedExceptionState = (state_PTR) BIOSDATAPAGE;
 
     /* extract the pending interrupt bits (bits 8-15 of the Cause register) */
-    int pending = savedExceptionState->s_cause;
-/*     pending = (savedExceptionState->s_cause >> 8) & 0xFF;
-    pending &= 0xFE; */
+    int interrupt_bit = savedExceptionState->s_cause;
+
+
+    /**
+     * @note
+     * Check for different types of interrupts based on priority
+     * Uing if but not if else because we need to handle all the interrupt if the bit is set
+     */
 
     /* Check for PLT interrupt (interrupt line 1, highest priority) */
-    if (pending & 0x00000200) {
+    if (interrupt_bit & IP_LINE1_TIMER_BIT) {
         PLTInterruptHandler();
     }
+
     /* Check for pseudo-clock (Interval Timer) interrupt (interrupt line 2) */
-    if (pending & 0x00000400) {
+    if (interrupt_bit & IP_LINE2_TIMER_BIT) {
         intervalTimerInterruptHandler();
     }
-    nonTimerInterruptHandler();
-    /* Check for device interrupts on lines 3-7 */
-    /* if (pending & DEVICE_INTERRUPT_STATUS) {
-        nonTimerInterruptHandler();
-    } */
-    /* if no known interrupt pending, simply call scheduler */
-/*     scheduler();
- */
-   /*  if (((savedExceptionState->s_cause) & 0x00000200) != ALLOFF){ 
- 		PLTInterruptHandler(); 
- 	}
- 	if (((savedExceptionState->s_cause) & 0x00000400) != ALLOFF){
- 		intervalTimerInterruptHandler();
- 	}
- 	nonTimerInterruptHandler(); */
 
+    /* Check for device interrupts (interrupt lines 3-7), which is bit from 10 to 15 */
+    nonTimerInterruptHandler();
 }
 

@@ -148,37 +148,32 @@
 #define CAUSE_INT_SHIFT                 8
 #define A8_BITS_ON                      0xFF
 #define EXC_RESERVED_INSTRUCTION        10  
-#define EXC_CODE_SHIFT                   2     
+#define EXC_CODE_SHIFT                  2 
+#define EXC_CODE_MASK                   0x0000007C
+#define IP_LINE1_TIMER_BIT              0x00000200
+#define IP_LINE2_TIMER_BIT              0x00000400
 
 /* Clock Constants*/
 #define PLT_TIME_SLICE          5000
 #define INTERVAL_TIMER          100000
 #define INF_TIME		        0xFFFFFFFF
 
-
 /* Device Constants */
 #define MAX_DEVICE_COUNT        49
 #define CLOCK_INDEX             (MAX_DEVICE_COUNT - 1)
+#define BASE_LINE               3
 
-
-
+/* Process Constants */
 #define	INIT_PROCESS_CNT		0
 #define	INIT_SOFT_BLOCK_CNT		0
 #define	PROCESS_INIT_START		0
-
-#define SUCCESS_CONST		0
-#define ERROR_CONST			-1
-
-#define BASE_LINE        3
-
-
-
-
-
-
-/* Phase 1 Constant */
 #define MAXPROC 20
 #define MAXINT 0x0FFFFFFF
 #define MAXPROC_SEM (MAXPROC + 2)
+
+/* Semaphore Constants */
+#define SUCCESS_CONST		0
+#define ERROR_CONST			-1
+
 
 #endif
