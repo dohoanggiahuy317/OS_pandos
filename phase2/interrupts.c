@@ -6,6 +6,12 @@
  * Interrupts are signals that cause the processor to temporarily halt its current task and 
  * jump to a dedicated function to handle events like hardware inputs, timers, or other asynchronous signals.
  * 
+ * Further details aboout the handler functions are provided below and in the code comments.
+ * 
+ * This file also implement the function findInterruptDevice() to find the device that generated the interrupt.
+ * This is use to determine the device number
+ *  
+ * 
  * @def
  * interruptTrapHandler()
  * This is the main entry point for handling interrupts. It saves the current state,

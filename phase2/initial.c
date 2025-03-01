@@ -3,10 +3,16 @@
  * 
  * @brief 
  * This file manages the initialization and operation of semaphore devices 
- * used to synchronize concurrent processes or threads. It is important because
- * it provides a reliable mechanism to control access to shared resources, ensuring
- * that operations are performed in a thread-safe manner. The file encapsulates the 
- * core concept of preventing race conditions by coordinating access through semaphores.
+ * used to synchronize concurrent processes or threads. 
+ * 
+ * The main function initializes the pass up vector, process control blocks (PCBs),
+ * active semaphore list (ASL), device semaphores, and other internal structures.
+ * It sets the process count to 0, creates an empty ready queue, and sets the current process to NULL.
+ * The purpose of this function is to provide a solid foundation for the scheduler and ensure system stability.
+ * 
+ * This file also implement the helper functions to initialize the pass up vector,
+ * update the process time, and initialize the device semaphores. These functions are
+ * used to set up the system and manage the execution of processes in a controlled manner.
  *
  * @def 
  * - semaphore: A global semaphore variable used to gate access to critical portions 
