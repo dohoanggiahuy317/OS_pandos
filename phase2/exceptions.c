@@ -41,6 +41,9 @@
  *     - addPigeonCurrentProcessHelper: add the exception state to the current process
  *      - blockCurrentProcessHelper: block the current process
  *
+ * 6. TIME POLICIES
+ * 
+ * 
  * @def
  * - System Call Handling (systemTrapHandler): The file distinguishes between system calls that return control
  * to the original process and SYS2 (terminateProcess) which terminates the process.
@@ -61,7 +64,32 @@
  * For SYSCALLs calls that do not block or terminate, control is returned to the
  * Current Process at the conclusion of the Nucleus’s SYSCALL exception handler.
  *
+ * @note
  * Also, I set the SYSCALL function to be hidden, so it is only visible within this file.
+ * 
+ * @note
+ * IMPORTANT:
+ * @ref terminateProcess
+ * - Non-device semaphores: have an internal counter that tracks how many processes are waiting 
+ * or available. When a process blocks on such a semaphore, it signals its waiting status by 
+ * incrementing this internal counter -> *(this_semaphore)++'
+ * - Device semaphores: associated with device I/O and don’t rely on an internal counting 
+ * mechanism -> it uses soft block count to track how many processes are waiting on device events.
+ * 
+ * Therefore, when process get terminated for non‑device semaphores, the semaphore itself already 
+ * keeps track of waiting processes via its own counter (the absolute value = number of processes waiting).
+ * 
+ * Device-related blocking uses a separate mechanism. 
+ * When the device’s status changes (an I/O completion that wakes the process), 
+ * decreases the softBlockedCount to indicate one fewer process is blocked on a device event. 
+ * 
+ * Example Scenario:
+ * Suppose Process A needs data from a disk and Process B needs to acquire a lock on as non-device.
+ * For Process B, it blocks by incrementing the lock’s internal count. This tells the lock mechanism
+ * that he is useing
+ * For Process A, when it enters a wait state, the system increases the soft blocked count. 
+ * When the disk I/O completes, instead of modifying an internal device semaphore counter, 
+ * the system decreases softBlockedCount. This signals that one device waiting process is now ready to run.
  *
  * @remark
  * This file is essential in defining the operational semantics of system calls in the

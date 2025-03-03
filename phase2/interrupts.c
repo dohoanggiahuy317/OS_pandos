@@ -10,7 +10,10 @@
  * 
  * This file also implement the function findInterruptDevice() to find the device that generated the interrupt.
  * This is use to determine the device number
- *  
+ * 
+ * IO HANDLER TIME POLICY:
+ * When the IO is handled, the time of the current process is charged to the interrupting process
+ * It then return to the current process 
  * 
  * @def
  * interruptTrapHandler()
@@ -314,6 +317,10 @@ void nonTimerInterruptHandler() {
      * @protocol
      * 1. Save the status code to register v0
      * 2. Insert the PCB to the ready queue
+     * 
+     * TIME POLICY:
+     * The pvb to unblock get charge the process time and then OS will return to 
+     * current process
     */
     if (pcb_to_unblock != NULL) {
         pcb_to_unblock->p_s.s_v0 = status_code;
