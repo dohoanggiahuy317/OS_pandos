@@ -327,7 +327,8 @@ void nonTimerInterruptHandler() {
         insertProcQ(&readyQueue, pcb_to_unblock);
         softBlockedCount--;
         STCK(curr_TOD);
-        pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD);
+/*         pcb_to_unblock->p_time = pcb_to_unblock->p_time + (curr_TOD - interrupt_TOD); */
+        updateProcessTimeHelper(pcb_to_unblock, interrupt_TOD, curr_TOD);
     }
 
     /** STEP 7: Switch Control to the current process
