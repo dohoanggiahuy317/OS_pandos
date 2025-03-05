@@ -28,6 +28,7 @@
  * - switchContext(pcb_PTR target_process)
  * The purpose of switching contexts is to save the current execution state, update the
  * current process pointer, record the current time so that it can resume execution. 
+ * This also upfate the start time of the process when this process reutnr to the CPU.
  *
  * @note
  * In the scheduler (LAST CASE), if the ready queue is empty and there are still processes in the system 
@@ -79,7 +80,7 @@ void switchContext(pcb_PTR target_process) {
     /* Step 1: set the process */
     currentProcess = target_process;
 
-    /* Step 2: save the current time */
+    /* Step 2: save the current time when retuirn to the rpocess */
     STCK(start_TOD);
 
     /* Step 3: load the state of the target process */
