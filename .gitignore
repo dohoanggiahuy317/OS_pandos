@@ -9,6 +9,7 @@
 *.umps
 kernel
 temp_testers
+*.docx
 
 # Packages #
 ############
